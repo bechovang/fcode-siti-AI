@@ -2,7 +2,7 @@
 
 > Tài liệu tổng hợp thô để các agent BMad (PM, Analyst, Architect...) tiêu thụ.
 > Nguồn gốc: `thongtin/*.docx` (2 bộ tài liệu hướng dẫn trò chơi) + `thongtin/lưu ý.txt` (ràng buộc mới).
-> Ngày tổng hợp: 2026-07-25. Ngôn ngữ: Tiếng Việt.
+> Ngày tổng hợp: 2026-07-25. Cập nhật: 2026-07-25 (TTS integration). Ngôn ngữ: Tiếng Việt.
 
 ---
 
@@ -32,6 +32,17 @@ Chuỗi AI hội thoại thời gian thực:
 3. **TTS (Text-to-Speech)** — giọng AI tự nhiên, rõ, dễ thương.
 4. **UX tự phục vụ** — dẫn dắt trẻ bằng màn hình/giọng/đèn để trẻ biết làm gì tiếp theo khi không có người hỗ trợ vật lý.
 5. **Độ trễ thấp** — toàn bộ vòng nghe→suy nghĩ→nói nên ≤ ~2–3 giây (trẻ thiếu kiên nhẫn).
+
+### Trạng thái triển khai hiện tại (Trò 1)
+
+| Thành phần | Giải pháp | Chi tiết |
+|---|---|---|
+| **TTS** | ✅ **Kokoro Vietnamese** (ONNX CPU) | 14 giọng VN, chạy CPU 5x realtime. Giọng mặc định: `mai_linh` |
+| **LLM Judge** | ✅ **OpenRouter GPT-4o-mini** | Chấm đáp án, fallback fuzzy match nếu mất kết nối |
+| **ASR** | ✅ **PhoWhisper** (CPU int8) | faster-whisper, fine-tune tiếng Việt, VAD filter |
+| **Server** | ✅ **FastAPI + WebSocket** | Chạy kịch bản 7 thử thách, TTS động, operator controls |
+| **Frontend** | ✅ **HTML/JS WebSocket client** | Hiệu ứng cầu vồng, câu hỏi, nút mic/text |
+| **Pipecat** | ⏸️ **Future consideration** | Framework real-time voice pipeline — đánh giá cho phase 2 |
 
 ---
 
@@ -98,8 +109,8 @@ Trò đối kháng đồng đội. Mỗi lượt: trẻ **bốc đồ mù** tron
 1. **Số đội** trò Tìm Nắng: 3 hay 4? (gốc mâu thuẫn).
 2. **Spec AI nhận diện**: ngưỡng độ chính xác, độ trễ tối đa, chạy online hay offline (sự kiện wifi yếu), xử lý khi đoán sai.
 3. **Spec ASR cho trẻ em tiếng Việt**: độ chính xác mục tiêu, từ vựng giới hạn, nhiễu sân khấu.
-4. **LLM/TTS**: chọn model/nhà cung cấp nào, ràng buộc an toàn nội dung cho trẻ, giọng AI.
-5. **Nội dung chưa có**: 7 câu hỏi đố (Cầu Vồng), danh sách vật phẩm chính thức (Tìm Nắng), sheet điểm.
+4. **LLM/TTS**: ✅ **Đã chọn** Kokoro Vietnamese (TTS, 14 giọng) + OpenRouter GPT-4o-mini (LLM judge). Ràng buộc an toàn nội dung cho trẻ qua system prompt.
+5. **Nội dung**: ✅ **Đã có** 7 câu hỏi + gợi ý (`koon_data.py`). Danh sách vật phẩm Tìm Nắng + sheet điểm chưa có.
 6. **Luồng tự vận hành**: trẻ biết làm gì tiếp theo qua tín hiệu gì (màn hình/đèn/giọng)? có cần onboarding ngắn?
 7. **Deadline & ràng buộc sự kiện**: ngày Gala, thời gian dựng/thử nghiệm, ngân sách, thiết bị có sẵn.
 8. **Số trạm/lượt chơi song song**: chạy 1 lần hay nhiều lần trong Gala?
@@ -114,8 +125,10 @@ Trò đối kháng đồng đội. Mỗi lượt: trẻ **bốc đồ mù** tron
 
 ---
 
-## 6. Trạng thái BMad
+## 6. Trạng thái BMad & Tiến độ
 
-- Dự án ở **Stage 0** (chưa có Project Brief/PRD/Architecture).
-- Tài liệu này là **đầu vào thô** cho bước **Project Brief** (agent John — PM, skill `bmad-product-brief`).
+- Dự án ở **Stage 0** (chưa có Project Brief/PRD/Architecture chính thức).
+- Đã implement: server Trò 1 với Kokoro TTS động, LLM judge, ASR PhoWhisper.
+- **Kế hoạch tiếp theo**: Chạy thử nghiệm với trẻ em, tinh chỉnh prompt KOON, phát triển Trò 2 (Tìm Nắng).
+- **Future**: Pipecat framework cho real-time voice pipeline phase 2.
 - Cấu hình BMad: `document_output_language = Vietnamese` (đã đặt).
