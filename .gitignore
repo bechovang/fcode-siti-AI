@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv_kokoro/
 venv/
 env/
 *.egg
@@ -29,9 +30,22 @@ app/assets/audio/
 # BMad output artifacts
 _bmad-output/
 
-# Git submodules (ref/ directories contain their own repos)
+# Test / temp
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Reference projects (some may have embedded .git, some are plain dirs)
+# Ignore submodule working trees and untracked content
 ref/Open-LLM-VTuber/
 ref/pipecat/
 ref/v-tts/
 ref/viet-asr/
 ref/capcut-tts-api/
+ref/cheap tts/
+
+# Kokoro-Vietnamese is a tracked submodule — ignore its internal venv/build artifacts only
+ref/Kokoro-Vietnamese/.venv_kokoro/
+ref/Kokoro-Vietnamese/build/
+ref/Kokoro-Vietnamese/dist/
+ref/Kokoro-Vietnamese/*.egg-info/
