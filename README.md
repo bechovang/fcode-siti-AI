@@ -4,92 +4,295 @@ Dự án xây dựng phần mềm AI cho phần giao lưu/giải trí trên sân
 
 Đội ngũ thực hiện: **F-Code**
 
+---
+
 ## Trò chơi
 
 ### 1. Cùng Koon Đi Tìm Cầu Vồng (AI hội thoại) ✅ Đang triển khai
 
-Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách** để tìm lại 7 sắc màu cầu vồng. Mỗi thử thách là một câu đố. Trả lời đúng → AI mở khóa 1 mảnh màu. Hoàn thành → cầu vồng phát sáng → video recap.
+Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách** để tìm lại 7 sắc màu cầu vồng.
 
+- **Cách chơi**: KOON đọc câu đố → trẻ trả lời (micro hoặc gõ chữ) → LLM chấm đúng/sai → đúng: mở khóa mảnh màu, sai: KOON gợi ý → thử lại
 - **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → PhoWhisper STT
 - **Thời lượng**: ~10–11 phút
 - **Server**: FastAPI + WebSocket (`app/server.py`)
 
 ### 2. Tìm Nắng Cùng AI (nhận diện hình ảnh) ⏳ Kế hoạch
 
-Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng vật phẩm → giơ trước camera → AI nhận diện → đúng thì về đích. Tính điểm 3-2-1.
+Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng → giơ trước camera → AI nhận diện → về đích. Tính điểm 3-2-1.
 
-- **Công nghệ**: Object recognition (AI nhận diện hình ảnh) + bảng điểm real-time
+- **Công nghệ**: Object recognition + bảng điểm real-time
 - **Thời lượng**: ~5 phút
+
+---
+
+## 🚀 Hướng dẫn chạy (Step-by-Step)
+
+### Yêu cầu
+
+| Thành phần | Yêu cầu |
+|---|---|
+| **Python** | ≥ 3.10 |
+| **RAM** | ≥ 8GB (khuyến nghị 16GB+) |
+| **CPU** | Đa lõi (TTS chạy ONNX CPU, ~5x realtime) |
+| **Ổ cứng** | ~5GB trống (cho model TTS + Whisper) |
+| **HĐH** | Windows (có thể chạy Linux/macOS) |
+
+### Bước 1: Clone repo
+
+```bash
+git clone https://github.com/bechovang/fcode-siti-AI.git
+cd fcode-siti-AI
+```
+
+### Bước 2: Cập nhật submodules
+
+```bash
+git submodule update --init --recursive
+```
+
+Lệnh này clone **Kokoro-Vietnamese** (TTS) — model ~2GB sẽ được download tự động khi chạy lần đầu.
+
+### Bước 3: Tạo virtual environment
+
+**Windows (cmd hoặc PowerShell):**
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+**Linux/macOS:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### Bước 4: Cài Kokoro Vietnamese TTS (ONNX)
+
+```bash
+pip install -e "ref/Kokoro-Vietnamese[onnx]"
+```
+
+> ⏱ Lần đầu cài có thể mất 5-10 phút (download torch, transformers, onnxruntime).
+
+### Bước 5: Cài các dependencies còn lại
+
+```bash
+pip install fastapi uvicorn openai rapidfuzz soundfile faster-whisper
+```
+
+### Bước 6: Thiết lập API keys
+
+**Cần thiết** (nếu không có, LLM judge sẽ fallback về fuzzy match kém chính xác hơn):
+
+```cmd
+set OPENROUTER_API_KEY=sk-or-v1-...   # Windows
+```
+
+```bash
+export OPENROUTER_API_KEY=sk-or-v1-...   # Linux/macOS
+```
+
+👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/)
+
+### Bước 7: Chạy server
+
+```bash
+python app/server.py
+```
+
+Bạn sẽ thấy log:
+
+```
+INFO TTS temp dir: C:\Users\...\koon_tts_xxx
+INFO LLM judge: OpenRouter openai/gpt-4o-mini
+INFO Kokoro TTS sẵn sàng (giọng mai_linh, device=cpu)
+INFO Uvicorn running on http://0.0.0.0:8000
+```
+
+### Bước 8: Mở trình duyệt
+
+Vào **http://localhost:8000** → bấm **"Bắt đầu"** → KOON sẽ nói chuyện và đặt câu hỏi!
+
+---
+
+## ⚙️ Tuỳ chỉnh
+
+### Đổi giọng KOON
+
+Kokoro có 14 giọng tiếng Việt:
+
+| Giọng | Mô tả |
+|---|---|
+| `mai_linh` | 🥇 Nữ, dễ thương — **mặc định** |
+| `diem_trinh` | Nữ, nhẹ nhàng |
+| `thuc_trinh` | Nữ, tự nhiên |
+| `ngoc_huyen` | Nữ, trẻ trung |
+| `my_yen` | Nữ, ấm áp |
+| `mai_loan` | Nữ, chậm rãi |
+| `phat_tai` | Nam, vui vẻ |
+| `hung_thinh` | Nam |
+| `manh_dung` | Nam |
+| `thanh_dat` | Nam |
+| `tuan_ngoc` | Nam |
+| `duc_an` | Nam |
+| `duc_duy` | Nam |
+| `storyvert` | Giọng kể chuyện |
+
+```cmd
+set KOON_VOICE=diem_trinh
+python app/server.py
+```
+
+### Đổi model LLM
+
+```cmd
+set OR_MODEL=anthropic/claude-sonnet-4
+set OR_MODEL=google/gemini-2.0-flash-001
+```
+
+### Toàn bộ biến môi trường
+
+| Biến | Mặc định | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS (14 giọng VN) |
+| `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM judge |
+| `OR_MODEL` | `openai/gpt-4o-mini` | ❌ | Model LLM trên OpenRouter |
+| `WHISPER_MODEL` | `diepho/PhoWhisper-small-ct2` | ❌ | Model ASR tiếng Việt |
+
+---
+
+## 🌐 API Endpoints
+
+| Endpoint | Method | Mô tả |
+|---|---|---|
+| `/` | GET | Trang chủ (giao diện game) |
+| `/ws` | WebSocket | Kết nối game real-time |
+| `/audio/{key}` | GET | Lấy file audio (WAV từ TTS hoặc MP3 cached) |
+| `/asr` | POST | Nhận audio → trả text tiếng Việt |
+| `/health` | GET | Kiểm tra trạng thái server |
+
+### WebSocket Messages
+
+**Server → Client:**
+```json
+{"type": "play_audio", "key": "tts_abc123", "tts": true}
+{"type": "state", "phase": "ask", "idx": 0, "unlocked": [], "total": 7}
+{"type": "show_question", "text": "...", "color": "Đỏ", "hex": "#e74c3c"}
+{"type": "await_answer"}
+{"type": "unlock_color", "hex": "#e74c3c"}
+{"type": "rainbow"}
+{"type": "ready"}
+{"type": "reset"}
+```
+
+**Client → Server:**
+```json
+{"type": "start"}
+{"type": "audio_ended"}
+{"type": "answer", "text": "dưa hấu"}
+{"type": "op", "action": "skip"}
+```
+
+---
+
+## 🏗 Cấu trúc thư mục
+
+```
+├── app/                        # Ứng dụng Python chính
+│   ├── server.py               # 🎯 Server FastAPI + WebSocket + Kokoro TTS
+│   ├── koon_data.py            # 📦 Dữ liệu 7 câu hỏi + đáp án + gợi ý
+│   ├── scripts/                # Scripts phụ trợ
+│   │   ├── gen_koon_voice.py       # Tạo voice mẫu (legacy)
+│   │   └── gen_koon_voice_capcut.py
+│   └── static/
+│       └── index.html          # 🖥 Giao diện game
+├── docs/                       # Tài liệu dự án
+│   ├── source-brief.md         # Tổng hợp yêu cầu
+│   └── kich-ban-koon.md        # Kịch bản chi tiết
+├── ref/                        # Reference implementations
+│   ├── Kokoro-Vietnamese/      # ✅ TTS tiếng Việt (ONNX, 14 giọng)
+│   ├── pipecat/                # ⏸️ Real-time voice pipeline (future)
+│   └── ...                     # Các reference khác
+├── thongtin/                   # Tài liệu gốc (.docx)
+├── .gitignore
+├── .gitmodules
+└── README.md
+```
+
+---
 
 ## Kiến trúc hệ thống
 
-### Luồng xử lý Trò 1 (Cầu Vồng)
+### Pipeline xử lý
 
 ```
-[KOON nói TTS] ──WebSocket──▶ [Frontend: phát WAV + hiệu ứng]
-[Trẻ trả lời]  ────Mic─────▶ [/asr: PhoWhisper] ──text──▶ [LLM Judge]
-[Judge] ──Đúng/Sai──▶ [KOON phản hồi động] ──TTS──▶ [Phát tiếp]
+                   ┌─────────────────────────────────────┐
+                   │         FastAPI Server               │
+                   │                                     │
+  ┌──────┐  WS   ┌▼────────┐  text  ┌──────────┐  Đ/S  ┌────────┐
+  │Client│◄─────►│Session  │◄──────►│LLM Judge │◄─────►│KOON    │
+  │(Web) │       │Flow     │        │(OpenAI/  │       │Script  │
+  └──────┘       └──┬──────┘        │ Fuzzy)   │       └───┬────┘
+                    │               └──────────┘           │
+                    │ audio                                │ text
+               ┌────▼─────┐                         ┌──────▼─────┐
+               │/audio    │                         │Kokoro TTS  │
+               │endpoint  │                         │(ONNX CPU)  │
+               └──────────┘                         └────────────┘
 ```
 
-### Công nghệ hiện tại
+### TTS Performance
 
-| Thành phần | Công nghệ | Trạng thái |
+| Độ dài câu | Thời gian gen | Hệ số |
 |---|---|---|
-| **TTS** | Kokoro Vietnamese (ONNX CPU, 14 giọng) | ✅ Đã tích hợp |
-| **LLM Judge** | OpenRouter GPT-4o-mini (hoặc fuzzy fallback) | ✅ Đã tích hợp |
-| **ASR** | faster-whisper / PhoWhisper (CPU int8) | ✅ Đã tích hợp |
-| **Server** | FastAPI + WebSocket | ✅ Đã tích hợp |
-| **Frontend** | HTML/CSS/JS + WebSocket client | ✅ Cơ bản |
-| **Pipecat** | Real-time voice pipeline framework | ⏸️ Future consideration |
+| 3 giây nói | ~0.55 giây | 5.4x realtime |
+| 10 giây nói | ~2 giây | 5x realtime |
 
-## Cấu trúc thư mục
+---
 
-```
-├── app/                     # Ứng dụng Python chính
-│   ├── server.py            # Server FastAPI + WebSocket + Kokoro TTS
-│   ├── koon_data.py         # Dữ liệu 7 câu hỏi + đáp án + gợi ý
-│   ├── scripts/             # Scripts phụ trợ (gen voice, …)
-│   └── static/              # Assets tĩnh (index.html)
-├── docs/                    # Tài liệu dự án
-│   ├── source-brief.md      # Tài liệu tổng hợp yêu cầu
-│   └── kich-ban-koon.md     # Kịch bản chi tiết game Koon
-├── ref/                     # Reference implementations
-│   ├── Kokoro-Vietnamese/   # ✅ Kokoro TTS (ONNX CPU, 14 giọng VN)
-│   ├── pipecat/             # ⏸️ Pipecat framework (future)
-│   ├── v-tts/               # Voice TTS
-│   ├── viet-asr/            # Vietnamese ASR
-│   ├── Open-LLM-VTuber/     # VTuber + LLM integration
-│   ├── capcut-tts-api/      # CapCut TTS API
-│   └── cheap tts/           # Lightweight TTS options
-├── thongtin/                # Tài liệu gốc (.docx)
-└── _bmad/                   # BMad agent configuration
-```
+## 🔧 Troubleshooting
 
-## Cách chạy
+### "Kokoro Vietnamese chưa cài" khi chạy server
 
 ```bash
-cd "fcode AI siti"
-
-# Cài dependencies
-.venv/Scripts/pip install -e ref/Kokoro-Vietnamese[onnx]
-
-# Chạy server
-set KOON_VOICE=mai_linh  # tuỳ chọn: mai_linh, diem_trinh, thuc_trinh...
-.venv/Scripts/python app/server.py
-
-# Mở http://localhost:8000
+pip install -e "ref/Kokoro-Vietnamese[onnx]"
 ```
 
-### Biến môi trường
+### Lỗi port 8000 đã được dùng
 
-| Biến | Mặc định | Mô tả |
-|---|---|---|
-| `KOON_VOICE` | `mai_linh` | Giọng Kokoro TTS (14 giọng VN) |
-| `OPENROUTER_API_KEY` | - | API key OpenRouter cho LLM judge |
-| `OR_MODEL` | `openai/gpt-4o-mini` | Model OpenRouter |
-| `WHISPER_MODEL` | `diepho/PhoWhisper-small-ct2` | Model ASR |
+```bash
+# Windows: tìm và kill process đang giữ port
+netstat -ano | findstr :8000
+taskkill /PID <PID> /F
+```
 
-## Tham khảo thêm
+### Ko có OpenRouter key — server vẫn chạy được không?
 
-- **Pipecat** (`ref/pipecat/`): Framework real-time voice pipeline — xem xét cho phiên bản sau
-- **Kokoro Vietnamese** (`ref/Kokoro-Vietnamese/`): TTS tiếng Việt với 14 giọng, chạy ONNX CPU
+Có. Server sẽ dùng **fuzzy match** (so khớp chữ cái) để chấm đáp án. Kém chính xác hơn LLM nhưng vẫn hoạt động.
+
+### Lỗi "faster-whisper" không cài
+
+```bash
+pip install faster-whisper
+```
+
+Model PhoWhisper (~2GB) sẽ tự động download lần đầu.
+
+### Giọng đọc bị "robot" / không tự nhiên
+
+Thử đổi giọng:
+```cmd
+set KOON_VOICE=thuc_trinh
+```
+
+Hoặc dùng `storyvert` (giọng kể chuyện, chậm hơn nhưng cảm xúc hơn).
+
+---
+
+## 📚 Tham khảo
+
+- [Kokoro Vietnamese](https://github.com/iamdinhthuan/Kokoro-Vietnamese) — TTS tiếng Việt ONNX CPU
+- [Pipecat](https://github.com/pipecat-ai/pipecat) — Real-time voice pipeline framework (future consideration)
+- [PhoWhisper](https://huggingface.co/diepho/PhoWhisper-small-ct2) — ASR tiếng Việt (CTranslate2)
+- [OpenRouter](https://openrouter.ai/) — Unified LLM API
