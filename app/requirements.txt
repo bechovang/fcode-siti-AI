@@ -4,7 +4,9 @@ uvicorn[standard]
 openai            # OpenRouter (OpenAI-compatible) — chấm đáp án
 rapidfuzz         # fuzzy match dự phòng khi chưa có LLM
 
+# STT tiếng Việt (ggml-PhoWhisper-small, whisper.cpp backend)
+pywhispercpp
+soundfile
+
 # === Cắm ở bước sau ===
-# faster-whisper   # STT tiếng Việt (PhoWhisper qua model_path) — nghe trẻ nói
-# edge-tts         # TTS live cho câu động (câu cố định đã pre-cache)
 # Audio DSP khử ồn: deepfilternet hoặc noisereduce (cho venue ồn)

@@ -13,7 +13,7 @@ Dự án xây dựng phần mềm AI cho phần giao lưu/giải trí trên sân
 Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách** để tìm lại 7 sắc màu cầu vồng.
 
 - **Cách chơi**: KOON đọc câu đố → trẻ trả lời (micro hoặc gõ chữ) → LLM chấm đúng/sai → đúng: mở khóa mảnh màu, sai: KOON gợi ý → thử lại
-- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → PhoWhisper STT
+- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → ggml-PhoWhisper-small (whisper.cpp)
 - **Thời lượng**: ~10–11 phút
 - **Server**: FastAPI + WebSocket (`app/server.py`)
 
@@ -75,13 +75,28 @@ pip install -e "ref/Kokoro-Vietnamese[onnx]"
 
 > ⏱ Lần đầu cài có thể mất 5-10 phút (download torch, transformers, onnxruntime).
 
-### Bước 5: Cài các dependencies còn lại
+### Bước 5: Tải model ASR (ggml-PhoWhisper-small, 465MB)
 
 ```bash
-pip install fastapi uvicorn openai rapidfuzz soundfile faster-whisper
+mkdir -p app/models
+python -c "
+import requests
+url = 'https://huggingface.co/dongxiat/ggml-PhoWhisper-small/resolve/b6677d19bc96a276d7cf5006e2ea18e18d02df16/ggml-PhoWhisper-small.bin'
+with open('app/models/ggml-PhoWhisper-small.bin', 'wb') as f:
+    resp = requests.get(url, stream=True, timeout=600)
+    resp.raise_for_status()
+    for chunk in resp.iter_content(8192): f.write(chunk)
+print('OK')
+"
 ```
 
-### Bước 6: Thiết lập API keys
+### Bước 6: Cài các dependencies còn lại
+
+```bash
+pip install fastapi uvicorn openai rapidfuzz soundfile pywhispercpp
+```
+
+### Bước 7: Thiết lập API keys
 
 **Cần thiết** (nếu không có, LLM judge sẽ fallback về fuzzy match kém chính xác hơn):
 
@@ -95,7 +110,7 @@ export OPENROUTER_API_KEY=sk-or-v1-...   # Linux/macOS
 
 👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/)
 
-### Bước 7: Chạy server
+### Bước 8: Chạy server
 
 ```bash
 python app/server.py
@@ -110,7 +125,7 @@ INFO Kokoro TTS sẵn sàng (giọng mai_linh, device=cpu)
 INFO Uvicorn running on http://0.0.0.0:8000
 ```
 
-### Bước 8: Mở trình duyệt
+### Bước 9: Mở trình duyệt
 
 Vào **http://localhost:8000** → bấm **"Bắt đầu"** → KOON sẽ nói chuyện và đặt câu hỏi!
 
@@ -158,7 +173,7 @@ set OR_MODEL=google/gemini-2.0-flash-001
 | `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS (14 giọng VN) |
 | `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM judge |
 | `OR_MODEL` | `openai/gpt-4o-mini` | ❌ | Model LLM trên OpenRouter |
-| `WHISPER_MODEL` | `diepho/PhoWhisper-small-ct2` | ❌ | Model ASR tiếng Việt |
+| `WHISPER_MODEL_PATH` | `app/models/ggml-PhoWhisper-small.bin` | ❌ | Path file model GGML ASR |
 
 ---
 
@@ -271,13 +286,11 @@ taskkill /PID <PID> /F
 
 Có. Server sẽ dùng **fuzzy match** (so khớp chữ cái) để chấm đáp án. Kém chính xác hơn LLM nhưng vẫn hoạt động.
 
-### Lỗi "faster-whisper" không cài
+### "pywhispercpp" không cài
 
 ```bash
-pip install faster-whisper
+pip install pywhispercpp
 ```
-
-Model PhoWhisper (~2GB) sẽ tự động download lần đầu.
 
 ### Giọng đọc bị "robot" / không tự nhiên
 
@@ -294,5 +307,5 @@ Hoặc dùng `storyvert` (giọng kể chuyện, chậm hơn nhưng cảm xúc h
 
 - [Kokoro Vietnamese](https://github.com/iamdinhthuan/Kokoro-Vietnamese) — TTS tiếng Việt ONNX CPU
 - [Pipecat](https://github.com/pipecat-ai/pipecat) — Real-time voice pipeline framework (future consideration)
-- [PhoWhisper](https://huggingface.co/diepho/PhoWhisper-small-ct2) — ASR tiếng Việt (CTranslate2)
+- [ggml-PhoWhisper-small](https://huggingface.co/dongxiat/ggml-PhoWhisper-small) — ASR tiếng Việt (whisper.cpp GGML)
 - [OpenRouter](https://openrouter.ai/) — Unified LLM API
