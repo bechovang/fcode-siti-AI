@@ -4,7 +4,7 @@
 - 7 thử thách, chấm đáp án LLM/fuzzy, operator controls.
 
 Backlog:
-  - STT (ggml-PhoWhisper-small): frontend stream audio -> endpoint /asr.
+  - STT (PhoWhisper): frontend stream audio -> endpoint /asr.
   - Live2D KOON: frontend (pixi-live2d-display), sync lip-sync với audio.
   - Khử ồn DSP: tiền xử lý audio trước khi vào STT.
 """
@@ -102,29 +102,35 @@ def judge(text: str, ch: dict) -> bool:
     return judge_fuzzy(text, ch)
 
 
-# ---------- STT (pywhispercpp + ggml-PhoWhisper-small, tiếng Việt) ----------
+# ---------- STT (faster-whisper, tiếng Việt) ----------
 _whisper = None
-WHISPER_MODEL_PATH = os.path.join(APP_DIR, "models", "ggml-PhoWhisper-small.bin")
 
 
 def get_whisper():
     global _whisper
     if _whisper is None:
-        from pywhispercpp.model import Model
-        mpath = os.environ.get("WHISPER_MODEL_PATH", WHISPER_MODEL_PATH)
-        log.info("Load Whisper GGML '%s'...", os.path.basename(mpath))
-        _whisper = Model(mpath, n_threads=8, language="vi")
+        from faster_whisper import WhisperModel
+        mname = os.environ.get("WHISPER_MODEL", "diepho/PhoWhisper-small-ct2")
+        log.info("Load Whisper '%s' (CPU int8) — ~20s lần đầu...", mname)
+        _whisper = WhisperModel(mname, device="cpu", compute_type="int8")
         log.info("Whisper sẵn sàng.")
     return _whisper
 
 
 def transcribe_path(path: str) -> str:
     m = get_whisper()
-    # initial_prompt: neo giải mã về TIẾNG VIỆT + từ vựng đáp án → chống hallucination
-    # pywhispercpp không support initial_prompt trực tiếp, dùng params
-    segments = m.transcribe(path, n_processors=1)
-    texts = [s.text.strip() for s in segments if s.text.strip()]
-    return " ".join(texts) if texts else ""
+    vocab = ", ".join(ch["answer"] for ch in K.CHALLENGES)
+    prompt = f"Trò chơi đố vui cho trẻ em tiếng Việt. Một số từ thường gặp: {vocab}."
+    segs, _ = m.transcribe(
+        path,
+        language="vi",
+        beam_size=1,
+        vad_filter=True,
+        initial_prompt=prompt,
+        condition_on_previous_text=False,
+        no_speech_threshold=0.6,
+    )
+    return " ".join(s.text for s in segs).strip()
 
 
 # ---------- app ----------
