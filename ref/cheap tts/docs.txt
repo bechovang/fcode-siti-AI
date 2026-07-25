@@ -1,0 +1,277 @@
+
+Cheap TTS
+API Docs
+Dashboard
+SDK Docs
+
+Overview
+Browser quickstart
+React SDK
+Node.js SDK
+CLI
+Python SDK
+Voices
+Progress
+API reference
+Security
+Errors
+Ready to ship
+Unlock API access and every voice.
+View plans
+v0.1
+Browser + React + Node.js + Python + CLI
+Unlimited multilingual TTS for apps and command-line workflows at a predictable low cost
+Cheap TTS combines an intelligent voice API with efficient SDK runtimes to deliver natural audio with unlimited generation. Get language-aware text processing, curated voices, and fast repeat performance through one simple integration.
+
+1
+Your app
+Text + voice alias
+→
+2
+Cheap TTS API
+Auth + input preparation
+→
+3
+Cheap TTS SDK
+Optimized audio generation
+Browser quickstart
+Activate a paid plan, create a project, register your browser origins, then initialize the package with its publishable key. Browser and React use this key; Node.js, Python, and CLI use a separate secret server key.
+
+Install the public package from npm.
+
+npm install @cheap-ttsbrowser-sdk
+import { CheapTts } from @cheap-ttsbrowser-sdk;
+
+const tts = new CheapTts({
+  publishableKey pk_live_your_project,
+});
+
+const result = await tts.synthesize({
+  text Xin chào từ Cheap TTS.,
+  voice vi-entertainment,
+});
+
+audio.src = URL.createObjectURL(result.audio);
+await audio.play();
+Open the live browser example →
+
+Development use pk_test_local against httplocalhost5173. Dashboard keys only work on origins trusted for their project. Register the exact scheme, host, and optional port; omit paths.
+React 18–19
+React SDK
+Manage voice state with React hooks
+The React wrapper manages the Browser SDK lifecycle, voice catalog, loading progress, synthesis state, and generated audio URLs. The Provider is safe to render during SSR and initializes the browser client only after mount.
+
+Install the React wrapper from npm.
+
+npm install @cheap-ttsreact
+import { CheapTtsProvider, useCheapTtsSynthesis } from @cheap-ttsreact;
+
+export function App() {
+  return (
+    CheapTtsProvider publishableKey=pk_live_your_project
+      VoiceGenerator 
+    CheapTtsProvider
+  );
+}
+
+function VoiceGenerator() {
+  const { synthesize, audioUrl, isSynthesizing } = useCheapTtsSynthesis();
+  return 
+    button disabled={isSynthesizing} onClick={() = void synthesize({
+      text Xin chào từ Cheap TTS.,
+      voice vi-entertainment,
+    }).catch(() = undefined)}Generate voicebutton
+    {audioUrl && audio controls src={audioUrl} }
+  ;
+}
+Browser-safe key React uses the same pk_live_... publishable key and allowed-origin checks as the Browser SDK. Do not put an sk_live_... server key in React code.
+React API reference
+API	Purpose
+CheapTtsProvider	Create and clean up the browser client; optionally load voices on mount.
+useCheapTts()	Read the client, catalog, provider status, errors, and refresh voices.
+useCheapTtsSynthesis()	Generate audio with progress, result, error, and an auto-revoked audio URL.
+useCheapTtsVoice(voice)	Preload a voice and abort stale loading when the component changes or unmounts.
+Node 20+
+Node.js SDK
+Generate voice in your backend
+Cheap TTS gives backend applications unlimited generation, the complete curated voice catalog, and a language-aware pipeline at a predictable low cost. Reusable local assets keep repeat generation efficient and fast.
+
+Install the public package from npm.
+
+npm install @cheap-ttsnode
+import { CheapTts } from @cheap-ttsnode;
+
+const tts = new CheapTts({
+  secretKey process.env.CHEAP_TTS_SECRET_KEY,
+});
+
+const result = await tts.synthesize({
+  text Xin chào từ Cheap TTS.,
+  voice vi-entertainment,
+});
+
+await result.save(.audio.wav);
+await tts.destroy();
+Server only create an sk_live_... key in Dashboard and store it in an environment variable. The Node SDK does not use publishable keys. Never expose the server key in browser code or a public repository.
+Warm up a voice
+Call loadVoice() when a worker starts so the first generation request is ready sooner. The SDK automatically manages reusable voice assets in its local cache.
+
+await tts.loadVoice({
+  voice en-narration,
+  onProgress ({ progress }) = console.log(progress),
+});
+Node API reference
+Method	Returns	Purpose
+tts.voices()	CheapTtsVoice[]	List the enabled voice catalog.
+tts.loadVoice(options)	CheapTtsVoice	Prepare one voice before generation.
+tts.synthesize(options)	{ audio, seconds, voice, save }	Generate a WAV as a Node.js Buffer.
+tts.clearCache()	void	Remove SDK-managed local voice assets.
+tts.destroy()	void	Release the active voice runtime.
+Node 20+
+Command-line interface
+Generate audio from your terminal
+Use the CLI for one-off generation, shell scripts, and CI jobs. It runs the same local inference engine as the Node SDK and reuses its model cache between runs.
+
+Install the command globally from npm.
+
+npm install --global @cheap-ttscli
+export CHEAP_TTS_SECRET_KEY=sk_live_your_project
+
+cheap-tts synthesize Xin chào từ Cheap TTS. 
+  --voice vi-entertainment 
+  --output speech.wav
+Keep the key secret set CHEAP_TTS_SECRET_KEY in your shell or CI secret store. Avoid putting it directly in a command, script, or repository.
+Files, pipes, and automation
+# Read a UTF-8 file
+cheap-tts say --file script.txt --voice vi-commentary --output narration.wav
+
+# Pipe text and return machine-readable metadata
+echo Hello from Cheap TTS.  cheap-tts say --voice en-narration --output hello.wav --json
+
+# Discover voices and clear cached models
+cheap-tts voices --json
+cheap-tts cache clear
+CLI reference
+Command or option	Purpose
+synthesize  say	Generate WAV audio from arguments, --file, or stdin.
+voices	List enabled voice IDs; add --json for automation.
+cache clear	Remove locally cached voice models.
+--output -	Write WAV bytes to stdout for pipelines.
+--no-telemetry	Disable operational health telemetry.
+Python 3.10–3.13
+Python SDK
+Generate voice in Python
+Use the same curated voice catalog and language-aware preparation from scripts, workers, notebooks, and backend services. The SDK caches voice models and performs ONNX inference locally.
+
+Install the public package from PyPI.
+
+pip install cheap-tts
+import os
+from cheap_tts import CheapTTS
+
+with CheapTTS(secret_key=os.environ[CHEAP_TTS_SECRET_KEY]) as tts
+    result = tts.synthesize(
+        text=Xin chào từ Cheap TTS.,
+        voice=vi-entertainment,
+    )
+    result.save(audio.wav)
+Server only create an sk_live_... key in Dashboard and store it in CHEAP_TTS_SECRET_KEY. Never commit or expose the server key in client-side code.
+Async Python
+import os
+from cheap_tts import AsyncCheapTTS
+
+async with AsyncCheapTTS(secret_key=os.environ[CHEAP_TTS_SECRET_KEY]) as tts
+    result = await tts.synthesize(Hello from Cheap TTS., en-narration)
+    result.save(audio.wav)
+Python API reference
+Method	Purpose
+tts.voices()	List the enabled voice catalog.
+tts.load_voice(...)	Download, validate, cache, and load one voice.
+tts.synthesize(...)	Prepare text and generate pitch-preserving WAV audio.
+tts.clear_cache()	Remove SDK-managed local voice assets.
+tts.close()	Release the active model and network resources.
+Models are cached in ~.cachecheap-ttsmodels. Set cache_dir or CHEAP_TTS_CACHE_DIR to use another location. Pass telemetry=False to disable operational health telemetry.
+
+Discover voices
+Use stable voice IDs to select a language, voice style, and use case.
+
+const voices = await tts.voices();
+
+ Filter the curated voices for one language
+const vietnamese = voices.filter((voice) = voice.language === vi);
+Voice ID	Language	Use case
+vi-entertainment	Vietnamese	Entertainment
+vi-commentary	Vietnamese	Commentary
+en-narration	English	Narration
+en-review	English	Review
++99 more curated voices across 41 more languages
+Unlock all voices
+103 voices. 43 languages. One API plan.
+Every paid plan includes the complete catalog and future voice additions.
+View plans
+Show browser progress
+Preload the selected voice before enabling generation. The SDK handles voice loading and reuses it on later visits when browser storage is available.
+
+await tts.loadVoice({
+  voice en-narration,
+  onProgress ({ progress }) = {
+    console.log(progress);  0..1, or null
+  },
+});
+await tts.synthesize({
+  text,
+  voice en-narration,
+  rate 1.1,
+  onProgress ({ stage, progress }) = {
+    console.log(stage, progress);  0..1, or null
+  },
+});
+session
+project authentication
+model
+voice loading
+synthesis
+audio generation
+Browser API reference
+new CheapTts(options)
+Option	Type	Description
+publishableKey	string	Required browser-safe project key.
+apiBase	string	Optional API base URL. Defaults to Cheap TTS production.
+workerUrl	string	Optional custom URL for the packaged module worker.
+vendorBase	string	Optional custom URL for WASM runtime files.
+tts.voices()
+Returns the enabled voice catalog as { id, name, language, useCase }[].
+
+tts.synthesize(options)
+Returns { audio, arrayBuffer, seconds, voice }. audio is a browser-ready audiowav Blob.
+
+tts.destroy()
+Terminates the worker and rejects active jobs. Call this when permanently unmounting the integration.
+
+Browser and React access security
+A publishable key is expected to be visible in Browser and React frontend code. It is not a secret and does not grant access by itself.
+
+The key is accepted only from origins trusted for your project.
+An active paid subscription is checked when sessions are created and text is prepared.
+The SDK exchanges it for a signed, short-lived browser session.
+Text preparation requires that session and is rate limited.
+Never place a Node or server secret key in browser code.
+Common errors
+Message	What to check
+Publishable key or origin is not allowed	Register the exact scheme and domain used by the app.
+Invalid server key	Use an active sk_live_... key from Dashboard only in Node.js, Python, or the CLI.
+Active subscription is required	Choose a paid plan in Dashboard, or update the payment method if the subscription is past due.
+Invalid or expired browser session	Retry the request; the SDK automatically refreshes normal sessions.
+Voice loading failed	Check network access and available browser storage.
+Unknown voice	Use a current ID returned by tts.voices().
+Ready to add multilingual voice
+Choose a plan, create an API project, and ship with the full voice catalog.
+
+View API plans
+Try live example
+© 2026 Cheap TTS.
+Languages
+Blog
+Privacy Policy
+Terms of Service
+Support

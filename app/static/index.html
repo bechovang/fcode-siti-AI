@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cùng Koon Đi Tìm Cầu Vồng</title>
+<style>
+  :root { --bg: #0b1020; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: #fff;
+    font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+  #stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+  #sky { position: absolute; inset: 0; background: linear-gradient(180deg, #1b2a4a 0%, #2d537f 60%, #6aa0c8 100%); transition: background .8s; }
+  /* Cầu vồng — 7 cung, sáng dần khi mở khóa */
+  #rainbow { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); width: 70vw; height: 40vh; pointer-events: none; }
+  #rainbow path { fill: none; stroke-width: 26; stroke-linecap: round; opacity: .12; transition: opacity .6s, filter .6s; }
+  #rainbow path.on { opacity: 1; filter: drop-shadow(0 0 16px currentColor); }
+  /* Vùng KOON (sẽ cắm Live2D) */
+  #koon { position: relative; z-index: 3; width: 320px; height: 320px; margin-bottom: 2vh;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle, rgba(255,255,255,.12), transparent 70%); border-radius: 50%; }
+  #koon .face { font-size: 120px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.4)); }
+  #koon.speaking .face { animation: bob .5s infinite alternate ease-in-out; }
+  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+  /* Câu hỏi */
+  #question { position: absolute; top: 52%; left: 50%; transform: translateX(-50%); z-index: 4;
+    max-width: 60vw; text-align: center; font-size: clamp(22px, 3.4vw, 44px); font-weight: 700;
+    text-shadow: 0 3px 14px rgba(0,0,0,.6); opacity: 0; transition: opacity .3s; padding: 14px 26px;
+    background: rgba(0,0,0,.32); border-radius: 22px; }
+  #question.show { opacity: 1; }
+  /* Trạng thái / chờ đáp án */
+  #status { position: absolute; bottom: 9%; z-index: 5; font-size: 20px; opacity: .85; }
+  #answerBar { position: absolute; bottom: 3%; z-index: 6; display: flex; gap: 12px; align-items: center;
+    background: rgba(0,0,0,.4); padding: 10px 16px; border-radius: 16px; }
+  #answerText { font-size: 20px; padding: 10px 14px; width: 320px; border-radius: 10px; border: none; }
+  button { cursor: pointer; border: none; border-radius: 10px; padding: 10px 16px; font-size: 16px; font-weight: 600; }
+  #send { background: #2ecc71; color: #042; }
+  #mic { background: #f1c40f; }
+  #mic.rec { background: #e74c3c; color: #fff; }
+  .hint { font-size: 13px; opacity: .6; }
+  /* Operator panel */
+  #op { position: absolute; top: 12px; right: 12px; z-index: 9; display: flex; gap: 8px; flex-wrap: wrap; max-width: 46vw; justify-content: flex-end; }
+  #op button { background: rgba(255,255,255,.16); color: #fff; font-size: 13px; padding: 8px 12px; }
+  #op button:hover { background: rgba(255,255,255,.3); }
+  #op .kbd { opacity: .6; font-size: 11px; }
+  #phaseTag { position: absolute; top: 12px; left: 12px; z-index: 9; background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 10px; font-size: 13px; }
+  #startOverlay { position: absolute; inset: 0; z-index: 30; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  #startOverlay h1 { font-size: clamp(30px, 5.5vw, 68px); margin: 0; text-align: center; text-shadow: 0 4px 24px rgba(0,0,0,.6); }
+  #startOverlay p { opacity: .8; font-size: 16px; max-width: 600px; text-align: center; }
+  #startBtn { font-size: 26px; padding: 18px 48px; border-radius: 18px; background: linear-gradient(135deg, #2ecc71, #27ae60); color: #042; box-shadow: 0 10px 36px rgba(0,0,0,.45); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="startOverlay">
+    <h1>🌈 Cùng Koon Đi Tìm Cầu Vồng</h1>
+    <p>Chào mừng các nhà thám hiểm nhí! Bấm để bắt đầu hành trình tìm lại 7 sắc màu cùng KOON.</p>
+    <button id="startBtn" onclick="startShow()">▶ Bắt đầu</button>
+  </div>
+  <div id="sky"></div>
+  <!-- 7 cung cầu vồng -->
+  <svg id="rainbow" viewBox="0 0 700 400"></svg>
+
+  <div id="op">
+    <button onclick="op('replay')">Đọc lại <span class="kbd">R</span></button>
+    <button onclick="op('skip')">Bỏ qua <span class="kbd">S</span></button>
+    <button onclick="op('force_correct')">Ép đúng <span class="kbd">F</span></button>
+    <button onclick="op('restart')">Chạy lại <span class="kbd">Esc</span></button>
+  </div>
+  <div id="phaseTag">—</div>
+
+  <div id="koon"><div class="face">🦊</div></div>
+  <div id="question"></div>
+  <div id="status"></div>
+
+  <div id="answerBar">
+    <input id="answerText" placeholder="Bé nói gì? (test gõ) hoặc nhấn 🎤" autocomplete="off" />
+    <button id="mic" onclick="toggleMic()">🎤 Mic</button>
+    <button id="send" onclick="sendAnswer()">Gửi</button>
+    <span class="hint">Enter = gửi</span>
+  </div>
+</div>
+
+<audio id="player" preload="auto"></audio>
+
+<script>
+const RAINBOW_HEX = ["#e74c3c","#e67e22","#f1c40f","#2ecc71","#3498db","#34495e","#9b59b6"];
+const player = document.getElementById('player');
+const koon = document.getElementById('koon');
+const qEl = document.getElementById('question');
+const statusEl = document.getElementById('status');
+const phaseTag = document.getElementById('phaseTag');
+const sky = document.getElementById('sky');
+
+// Vẽ 7 cung cầu vồng
+(function(){
+  const svg = document.getElementById('rainbow');
+  RAINBOW_HEX.forEach((hex, i) => {
+    const r = 320 - i*26;
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d', `M ${350-r} 380 A ${r} ${r} 0 0 1 ${350+r} 380`);
+    p.setAttribute('stroke', hex);
+    p.style.color = hex;
+    p.dataset.hex = hex;
+    svg.appendChild(p);
+  });
+})();
+function unlockHex(hex){ document.querySelectorAll('#rainbow path').forEach(p=>{ if(p.dataset.hex===hex) p.classList.add('on'); }); }
+function clearRainbow(){ document.querySelectorAll('#rainbow path').forEach(p=>p.classList.remove('on')); }
+
+const ws = new WebSocket((location.protocol==='https:'?'wss':'ws') + '://' + location.host + '/ws');
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  switch(m.type){
+    case 'play_audio': playAudio(m.key); break;
+    case 'show_question': qEl.textContent = m.text; qEl.classList.add('show'); break;
+    case 'await_answer': statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)'; break;
+    case 'unlock_color': unlockHex(m.hex); break;
+    case 'rainbow': statusEl.textContent = '🌈 Cầu vồng rực rỡ!'; clearRainbow(); RAINBOW_HEX.forEach(unlockHex); break;
+    case 'reset': clearRainbow(); qEl.classList.remove('show'); qEl.textContent=''; statusEl.textContent=''; break;
+    case 'state': phaseTag.textContent = `Giai đoạn: ${m.phase} · ${m.idx+1}/${m.total} · đã mở ${m.unlocked.length}`; break;
+  }
+};
+
+function startShow(){
+  document.getElementById('startOverlay').style.display = 'none';
+  // Prime audio: mở khóa autoplay bằng cú click (play mute rồi bỏ mute)
+  player.muted = true;
+  player.play().then(() => { player.muted = false; }).catch(() => { player.muted = false; });
+  if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'start' }));
+}
+
+function playAudio(key){
+  koon.classList.add('speaking');
+  qEl.classList.remove('show'); // ẩn câu hỏi cũ khi KOON nói (trừ lúc đọc câu hỏi)
+  player.src = `/audio/${key}.mp3`;
+  player.play().catch(err=>console.warn('play err', err));
+}
+player.onended = () => { koon.classList.remove('speaking'); ws.send(JSON.stringify({type:'audio_ended'})); };
+
+function sendAnswer(){
+  const t = document.getElementById('answerText').value.trim();
+  if(!t) return;
+  ws.send(JSON.stringify({type:'answer', text:t}));
+  document.getElementById('answerText').value='';
+  statusEl.textContent='...';
+}
+document.getElementById('answerText').addEventListener('keydown', e=>{ if(e.key==='Enter') sendAnswer(); });
+
+function op(action){ ws.send(JSON.stringify({type:'op', action})); }
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  const map = {'r':'replay','s':'skip','f':'force_correct','Escape':'restart'};
+  if(map[e.key]) op(map[e.key]);
+});
+
+// Mic (placeholder — sẽ nối STT PhoWhisper ở /asr)
+let rec=false, mediaRec=null;
+async function toggleMic(){
+  const btn=document.getElementById('mic');
+  if(rec){ mediaRec.stop(); return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    mediaRec = new MediaRecorder(stream);
+    const chunks=[];
+    mediaRec.ondataavailable = e=>chunks.push(e.data);
+    mediaRec.onstop = async ()=>{
+      rec=false; btn.classList.remove('rec'); btn.textContent='🎤 Mic';
+      const blob=new Blob(chunks,{type:'audio/webm'});
+      statusEl.textContent='🎧 đang nhận diện giọng nói...';
+      try{
+        const r = await fetch('/asr',{method:'POST', body: blob});
+        const j = await r.json();
+        const text=(j.text||'').trim();
+        statusEl.textContent = text ? `bé nói: "${text}"` : '(không nghe rõ — thử lại)';
+        if(text) ws.send(JSON.stringify({type:'answer', text}));
+      }catch(e){ statusEl.textContent='lỗi STT: '+e.message; }
+    };
+    mediaRec.start(); rec=true; btn.classList.add('rec'); btn.textContent='⏹ Dừng';
+  }catch(err){ statusEl.textContent='Không truy cập được mic: '+err.message; }
+}
+</script>
+</body>
+</html>

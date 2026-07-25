@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+*.egg
+dist/
+build/
+
+# Logs
+*.log
+excalidraw.log
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+nul
+
+# IDE
+.vscode/
+.idea/
+
+# Audio assets (generated)
+app/assets/audio/
+
+# BMad output artifacts
+_bmad-output/
+
+# Git submodules (ref/ directories contain their own repos)
+ref/Open-LLM-VTuber/
+ref/pipecat/
+ref/v-tts/
+ref/viet-asr/
+ref/capcut-tts-api/

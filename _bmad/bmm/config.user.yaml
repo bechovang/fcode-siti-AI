@@ -1,0 +1,4 @@
+# Personal/local overrides for BMM module config (bmm/config.yaml).
+# Reflects user's explicit choice (2026-07-25): converse & author in Vietnamese.
+communication_language: Vietnamese
+document_output_language: Vietnamese
