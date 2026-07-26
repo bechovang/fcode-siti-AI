@@ -112,6 +112,15 @@ app = FastAPI()
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# Live2D models: serve từ ref/Open-LLM-VTuber (gitignored — KHÔNG commit asset proprietary)
+LIVE2D_DIR = os.path.normpath(os.path.join(APP_DIR, "..", "ref", "Open-LLM-VTuber", "live2d-models"))
+LIVE2D_AVAILABLE = os.path.isdir(LIVE2D_DIR)
+if LIVE2D_AVAILABLE:
+    app.mount("/live2d", StaticFiles(directory=LIVE2D_DIR), name="live2d")
+    log.info("Live2D: /live2d (mao_pro) — từ ref/Open-LLM-VTuber/live2d-models")
+else:
+    log.warning("Live2D: thiếu ref/Open-LLM-VTuber/live2d-models — avatar dùng fallback emoji 🦊")
+
 
 # ---------- session / flow ----------
 class Session:
@@ -364,6 +373,7 @@ async def health():
         "stt": "browser (Web Speech API)",
         "llm": bool(llm),
         "llm_model": OR_MODEL if llm else None,
+        "live2d": LIVE2D_AVAILABLE,
     }
 
 

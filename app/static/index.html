@@ -16,12 +16,14 @@
   #rainbow path { fill: none; stroke-width: 26; stroke-linecap: round; opacity: .12; transition: opacity .6s, filter .6s; }
   #rainbow path.on { opacity: 1; filter: drop-shadow(0 0 16px currentColor); }
   /* Vùng KOON (sẽ cắm Live2D) */
-  #koon { position: relative; z-index: 3; width: 320px; height: 320px; margin-bottom: 2vh;
+  #koon { position: relative; z-index: 3; width: min(640px, 60vh); height: min(640px, 60vh); margin-bottom: 0;
     display: flex; align-items: center; justify-content: center;
     background: radial-gradient(circle, rgba(255,255,255,.12), transparent 70%); border-radius: 50%; }
   #koon .face { font-size: 120px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.4)); }
   #koon.speaking .face { animation: bob .5s infinite alternate ease-in-out; }
   @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+  #koonCanvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+  #koon.live2d .face { opacity: 0; }   /* ẩn emoji 🦊 khi Live2D active */
   /* Câu hỏi */
   #question { position: absolute; top: 52%; left: 50%; transform: translateX(-50%); z-index: 4;
     max-width: 60vw; text-align: center; font-size: clamp(22px, 3.4vw, 44px); font-weight: 700;
@@ -60,6 +62,10 @@
   #testBtn.rec { background: #e74c3c; color: #fff; }
   #testOut { margin-top: 10px; min-height: 22px; font-size: 16px; line-height: 1.4; }
 </style>
+<!-- Live2D: pixi v6 + Cubism 4 core + pixi-live2d-display (bản cubism4, vendor local) -->
+<script src="/static/libs/pixi.min.js"></script>
+<script src="/static/libs/live2dcubismcore.min.js"></script>
+<script src="/static/libs/cubism4.min.js"></script>
 </head>
 <body>
 <div id="stage">
@@ -82,7 +88,10 @@
   </div>
   <div id="phaseTag">—</div>
 
-  <div id="koon"><div class="face">🦊</div></div>
+  <div id="koon">
+    <canvas id="koonCanvas"></canvas>
+    <div class="face">🦊</div>
+  </div>
   <div id="question"></div>
   <div id="status"></div>
 
@@ -135,7 +144,7 @@ ws.onmessage = (e) => {
     case 'play_audio': playAudio(m.key); break;
     case 'show_question': qEl.textContent = m.text; qEl.classList.add('show'); break;
     case 'await_answer': statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)'; break;
-    case 'unlock_color': unlockHex(m.hex); break;
+    case 'unlock_color': unlockHex(m.hex); koonHappy(); break;
     case 'rainbow': statusEl.textContent = '🌈 Cầu vồng rực rỡ!'; clearRainbow(); RAINBOW_HEX.forEach(unlockHex); break;
     case 'reset': clearRainbow(); qEl.classList.remove('show'); qEl.textContent=''; statusEl.textContent=''; break;
     case 'state': phaseTag.textContent = `Giai đoạn: ${m.phase} · ${m.idx+1}/${m.total} · đã mở ${m.unlocked.length}`; break;
@@ -144,6 +153,7 @@ ws.onmessage = (e) => {
 
 function startShow(){
   document.getElementById('startOverlay').style.display = 'none';
+  ensureLipCtx();  // tạo+resume AudioContext trong gesture → decodeAudioData ổn định
   // Prime audio: mở khóa autoplay bằng cú click (play mute rồi bỏ mute)
   player.muted = true;
   player.play().then(() => { player.muted = false; }).catch(() => { player.muted = false; });
@@ -153,8 +163,10 @@ function startShow(){
 function playAudio(key){
   koon.classList.add('speaking');
   qEl.classList.remove('show'); // ẩn câu hỏi cũ khi KOON nói (trừ lúc đọc câu hỏi)
-  player.src = `/audio/${key}.mp3`;
+  const url = `/audio/${key}.mp3`;
+  player.src = url;
   player.play().catch(err=>console.warn('play err', err));
+  decodeForLipSync(url);  // giải mã PCM để lip-sync
 }
 player.onended = () => { koon.classList.remove('speaking'); ws.send(JSON.stringify({type:'audio_ended'})); };
 
@@ -268,6 +280,99 @@ async function loadDiag(){
     `<div class="row">STT: <b>${sttBr}</b></div>`;
 }
 function toggleDiag(){ const d=document.getElementById('diag'); d.classList.toggle('show'); if(d.classList.contains('show')) loadDiag(); }
+
+// ============ Live2D avatar (mao_pro) + lip-sync theo amplitude giọng TTS ============
+let l2d = null;                 // {app, model, audioBuffer, ctx, mouth}
+const LIPSYNC_PARAM = 'ParamA'; // mao_pro: LipSync group → ParamA
+let lipCtx = null;        // AudioContext để decodeAudioData
+// State = LAppWavFileHandler (port y nguyên từ Open-LLM-VTuber)
+let lipPcm = null, lipSr = 0, lipTotal = 0, lipUserTime = 0, lipOffset = 0;
+
+// KOON vui khi mở khoá mảnh màu (đáp án đúng)
+function koonHappy(){
+  if(!l2d) return;
+  try{ l2d.model.expression('exp_01'); }catch(e){} // biểu cảm vui (chỉnh exp_0X khi test)
+  try{ l2d.model.motion(); }catch(e){}             // 1 motion ngẫu nhiên
+}
+
+async function initLive2D(){
+  if(!window.PIXI || !window.PIXI.live2d || !window.Live2DCubismCore){
+    return console.warn('[Live2D] thiếu lib → giữ emoji 🦊');
+  }
+  const canvas = document.getElementById('koonCanvas');
+  if(!canvas) return;
+  try{
+    const W = canvas.clientWidth || 320, H = canvas.clientHeight || 320;
+    const app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, antialias: true, width: W, height: H });
+    const model = await PIXI.live2d.Live2DModel.from('/live2d/mao_pro/runtime/mao_pro.model3.json');
+    app.stage.addChild(model);
+
+    // Fit model vào khung #koon, canh giữa
+    const fit = () => {
+      const s = Math.min(W / model.internalModel.width, H / model.internalModel.height);  // fill hết khung
+      model.scale.set(s);
+      model.x = (W - model.width) / 2;
+      model.y = (H - model.height) / 2;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+
+    try{ model.motion('Idle'); }catch(e){}
+    koon.classList.add('live2d');   // ẩn emoji 🦊
+    l2d = { app, model };
+    // Lip-sync: PATCH internalModel.update để set ParamA SAU update (trước render).
+    // Set trong app.ticker hay setParameterValueById tay đều bị loadParameters() reset mỗi frame → miệng đứng im.
+    const coreModel = model.internalModel.coreModel;
+    // Hook ĐÚNG phase: event 'beforeModelUpdate' chạy SAU mọi effect (blink/focus/breath/physics),
+    // TRƯỚC model.update() (bake param vào render). Set ParamA ở đây → được bake → HIỆN.
+    // (Set trong internalModel.update hay app.ticker đều bị model.loadParameters() ở cuối update reset.)
+    let lastT = performance.now();
+    model.internalModel.on('beforeModelUpdate', () => {
+      const now = performance.now();
+      let dts = (now - lastT) / 1000; lastT = now;
+      if(dts > 0.1) dts = 0.1;                             // kẹp tránh nhảy khi tab nền
+      let value = 0;
+      if(lipPcm && lipOffset < lipTotal){
+        lipUserTime += dts;                                // port LAppWavFileHandler.update
+        let goalOffset = Math.floor(lipUserTime * lipSr);
+        if(goalOffset > lipTotal) goalOffset = lipTotal;
+        let sum = 0, cnt = 0;
+        for(let i = lipOffset; i < goalOffset; i++){ sum += lipPcm[i] * lipPcm[i]; cnt++; }
+        const rms = cnt ? Math.sqrt(sum / cnt) : 0;
+        lipOffset = goalOffset;
+        value = Math.min(1.0, rms * 1.5);                 // boost ×1.5 (như OLLV)
+      }
+      try{ coreModel.setParameterValueById(LIPSYNC_PARAM, value); }catch(e){}
+    });
+    console.log('[Live2D] KOON = mao_pro, lip-sync hook beforeModelUpdate');
+  }catch(err){
+    console.warn('[Live2D] load lỗi → giữ emoji 🦊:', err && err.message || err);
+  }
+}
+
+// Giải mã PCM của audio để lip-sync (giống Open-LLM-VTuber: RMS theo currentTime).
+// Playback vẫn do <audio id=player>; analysis đọc PCM đã decode → chính xác, không cần analyser/MediaElementSource.
+function ensureLipCtx(){
+  if(lipCtx) return;
+  try{
+    lipCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(lipCtx.state === 'suspended') lipCtx.resume();
+    console.log('[Live2D] lipCtx sẵn sàng (state=%s)', lipCtx.state);
+  }catch(e){ console.warn('[Live2D] tạo AudioContext lỗi:', e); }
+}
+async function decodeForLipSync(url){
+  if(!lipCtx) ensureLipCtx();
+  try{
+    const resp = await fetch(url);
+    if(!resp.ok){ console.warn('[Live2D] fetch audio LỖI', resp.status, url); return; }
+    const ab = await lipCtx.decodeAudioData(await resp.arrayBuffer());
+    lipPcm = ab.getChannelData(0); lipSr = ab.sampleRate; lipTotal = lipPcm.length;
+    lipUserTime = 0; lipOffset = 0;   // reset handler (= LAppWavFileHandler.start)
+    console.log('[Live2D] PCM %.2fs ← %s', ab.duration, url);
+  }catch(err){ console.warn('[Live2D] decode LỖI:', err); }
+}
+
+initLive2D();   // tải model ngay khi mở trang
 </script>
 </body>
 </html>

@@ -13,7 +13,7 @@ Dự án xây dựng phần mềm AI cho phần giao lưu/giải trí trên sân
 Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách** để tìm lại 7 sắc màu cầu vồng.
 
 - **Cách chơi**: KOON đọc câu đố → trẻ trả lời (micro hoặc gõ chữ) → LLM chấm đúng/sai → đúng: mở khóa mảnh màu, sai: KOON gợi ý → thử lại
-- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → STT bằng Web Speech API của browser (Chrome=Google / Edge=Azure)
+- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → STT Web Speech API (Chrome=Google / Edge=Azure) → Live2D avatar (mao_pro, lip-sync theo giọng TTS)
 - **Thời lượng**: ~10–11 phút
 - **Server**: FastAPI + WebSocket (`app/server.py`)
 
@@ -212,12 +212,14 @@ set OR_MODEL=google/gemini-2.0-flash-001
 │   │   ├── gen_koon_voice.py       # Tạo voice mẫu (legacy)
 │   │   └── gen_koon_voice_capcut.py
 │   └── static/
-│       └── index.html          # 🖥 Giao diện game
+│       ├── index.html          # 🖥 Giao diện game + Live2D KOON (lip-sync theo giọng TTS)
+│       └── libs/               # 🧩 pixi v6 + Cubism core + pixi-live2d-display (vendor local)
 ├── docs/                       # Tài liệu dự án
 │   ├── source-brief.md         # Tổng hợp yêu cầu
 │   └── kich-ban-koon.md        # Kịch bản chi tiết
 ├── ref/                        # Reference implementations
 │   ├── Kokoro-Vietnamese/      # ✅ TTS tiếng Việt (ONNX, 14 giọng)
+│   ├── Open-LLM-VTuber/        # 🦊 Nguồn model Live2D (mao_pro) — gitignore, không commit
 │   ├── pipecat/                # ⏸️ Real-time voice pipeline (future)
 │   └── ...                     # Các reference khác
 ├── thongtin/                   # Tài liệu gốc (.docx)
@@ -282,6 +284,16 @@ Có. Server sẽ dùng **fuzzy match** (so khớp chữ cái) để chấm đáp
 - Nếu truy cập bằng IP thay vì `localhost` → phải dùng **HTTPS** (browser chỉ cho phép mic trên localhost hoặc HTTPS).
 - Bấm **"🧪 Test mic / STT"** ở màn start để kiểm tra nhanh — kết quả hiện kèm engine đang dùng.
 - Trên sân khấu nếu STT vẫn nhận sai: operator bấm **F (Ép đúng)** để KOON tiếp tục.
+
+### KOON vẫn là emoji 🦊 (Live2D không hiện)
+
+Avatar Live2D lấy từ `ref/Open-LLM-VTuber/live2d-models/` (thư mục này **gitignore** — không có sau fresh clone). Nếu thiếu, game tự **fallback về emoji 🦊**, vẫn chơi bình thường. Để có avatar:
+
+```bash
+git clone https://github.com/Open-LLM-VTuber/Open-LLM-VTuber.git ref/Open-LLM-VTuber
+```
+
+Restart server → log hiện `Live2D: /live2d (mao_pro)` và `/health` trả `"live2d": true`. (Model mao_pro = Niziiro Mao, sample Live2D free-material.)
 
 ### Giọng đọc bị "robot" / không tự nhiên
 
