@@ -8,57 +8,116 @@
   :root { --bg: #0b1020; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: #fff;
-    font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
-  #stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
-  #sky { position: absolute; inset: 0; background: linear-gradient(180deg, #1b2a4a 0%, #2d537f 60%, #6aa0c8 100%); transition: background .8s; }
-  /* Cầu vồng — 7 cung, sáng dần khi mở khóa */
-  #rainbow { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); width: 70vw; height: 40vh; pointer-events: none; }
-  #rainbow path { fill: none; stroke-width: 26; stroke-linecap: round; opacity: .12; transition: opacity .6s, filter .6s; }
-  #rainbow path.on { opacity: 1; filter: drop-shadow(0 0 16px currentColor); }
-  /* Vùng KOON (sẽ cắm Live2D) */
-  #koon { position: relative; z-index: 3; width: min(640px, 60vh); height: min(640px, 60vh); margin-bottom: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(circle, rgba(255,255,255,.12), transparent 70%); border-radius: 50%; }
-  #koon .face { font-size: 120px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.4)); }
-  #koon.speaking .face { animation: bob .5s infinite alternate ease-in-out; }
-  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-10px); } }
-  #koonCanvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
-  #koon.live2d .face { opacity: 0; }   /* ẩn emoji 🦊 khi Live2D active */
-  /* Câu hỏi */
-  #question { position: absolute; top: 52%; left: 50%; transform: translateX(-50%); z-index: 4;
-    max-width: 60vw; text-align: center; font-size: clamp(22px, 3.4vw, 44px); font-weight: 700;
-    text-shadow: 0 3px 14px rgba(0,0,0,.6); opacity: 0; transition: opacity .3s; padding: 14px 26px;
-    background: rgba(0,0,0,.32); border-radius: 22px; }
+    font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
+  #stage { position: relative; width: 100vw; height: 100vh; }
+
+  /* ============ TRỜI + SAO (full bg) ============ */
+  #sky { position: absolute; inset: 0; background: linear-gradient(180deg, #1b2a4a 0%, #2d537f 50%, #6aa0c8 100%); transition: background .8s; z-index: 0; }
+  #stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  .star { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%;
+    animation: twinkle var(--dur) ease-in-out infinite alternate; opacity: .3; }
+  @keyframes twinkle { from { opacity: .2; } to { opacity: .8; } }
+
+  /* ============ CỘT TRÁI (câu hỏi + thanh tiến trình) ============ */
+  #leftCol { position: absolute; top: 0; left: 0; width: 48vw; height: 100vh; z-index: 3; overflow: hidden; }
+
+  #progressBar { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: flex; gap: 8px; align-items: center;
+    background: rgba(0,0,0,.25); padding: 6px 14px; border-radius: 20px; backdrop-filter: blur(4px); }
+  .orb { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2);
+    background: rgba(255,255,255,.06); transition: all .5s cubic-bezier(.34,1.56,.64,1);
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+  .orb.done { border-color: var(--orb-color); background: var(--orb-color); box-shadow: 0 0 16px var(--orb-color), inset 0 0 8px rgba(255,255,255,.3);
+    transform: scale(1.08); }
+  .orb.done::after { content: '★'; color: #fff; font-size: 12px; }
+  .orb.active { border-color: rgba(255,255,255,.6); box-shadow: 0 0 12px rgba(255,255,255,.25); animation: pulse-orb 1.2s infinite; }
+  @keyframes pulse-orb { 0%,100%{box-shadow:0 0 0 rgba(255,255,255,0)} 50%{box-shadow:0 0 14px rgba(255,255,255,.3)} }
+
+  #phaseTag { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); z-index: 5;
+    background: rgba(0,0,0,.35); padding: 4px 12px; border-radius: 8px; font-size: 11px; opacity: .7; }
+
+  #question { position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); z-index: 4;
+    max-width: 42vw; width: 90%; text-align: center; font-size: clamp(24px, 4vw, 56px); font-weight: 700; line-height: 1.4;
+    text-shadow: 0 4px 20px rgba(0,0,0,.7); opacity: 0; transition: opacity .35s; padding: 20px 28px;
+    background: rgba(0,0,0,.5); border-radius: 24px; border: 2px solid rgba(255,255,255,.15); }
   #question.show { opacity: 1; }
-  /* Trạng thái / chờ đáp án */
-  #status { position: absolute; bottom: 9%; z-index: 5; font-size: 20px; opacity: .85; }
-  #answerBar { position: absolute; bottom: 3%; z-index: 6; display: flex; gap: 12px; align-items: center;
-    background: rgba(0,0,0,.4); padding: 10px 16px; border-radius: 16px; }
-  #answerText { font-size: 20px; padding: 10px 14px; width: 320px; border-radius: 10px; border: none; }
+  #question.has-color { border-color: var(--q-color, rgba(255,255,255,.35)); box-shadow: 0 0 50px color-mix(in srgb, var(--q-color, transparent) 20%, transparent); }
+
+  #status { position: absolute; left: 50%; transform: translateX(-50%); bottom: 100px; z-index: 4;
+    font-size: 18px; opacity: .85; background: rgba(0,0,0,.4); padding: 5px 18px; border-radius: 14px;
+    white-space: nowrap; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
+
+  #sttHeard { position: absolute; left: 50%; transform: translateX(-50%); bottom: 148px; z-index: 4;
+    font-size: 15px; opacity: 0; transition: opacity .3s; background: rgba(0,0,0,.55); padding: 8px 20px; border-radius: 14px;
+    max-width: 42vw; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+    border: 1px solid rgba(255,255,255,.12); }
+  #sttHeard.show { opacity: 1; }
+
+  /* ============ CỘT PHẢI (cầu vồng + KOON) ============ */
+  #rightCol { position: absolute; top: 0; left: 48vw; width: 52vw; height: 100vh; z-index: 2; overflow: hidden; }
+
+  #rainbow { position: absolute; left: 50%; transform: translateX(-50%); top: 2%; width: 48vw; height: 36vh; pointer-events: none; }
+  #rainbow path { fill: none; stroke-width: 22; stroke-linecap: round; opacity: .1; transition: opacity .6s, filter .6s; }
+  #rainbow path.on { opacity: 1; filter: drop-shadow(0 0 18px currentColor); }
+
+  #koon { position: absolute; left: 50%; top: 48%; transform: translate(-50%, -50%);
+    width: min(420px, 40vh); height: min(420px, 40vh); z-index: 3;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle, rgba(255,255,255,.08), transparent 60%); border-radius: 50%; }
+  #koon .face { font-size: 90px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.4)); }
+  #koon.speaking .face { animation: bob .5s infinite alternate ease-in-out; }
+  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+  #koonCanvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; z-index: 1; }
+  #koon.live2d .face { opacity: 0; }
+
+  /* ============ OPERATOR (top-right, full width) ============ */
+  #op { position: absolute; top: 12px; right: 12px; z-index: 9; display: flex; gap: 6px; flex-wrap: wrap; max-width: 48vw; justify-content: flex-end; }
+  #op button { background: rgba(255,255,255,.14); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; }
+  #op button:hover { background: rgba(255,255,255,.3); }
+  #op .kbd { opacity: .5; font-size: 10px; }
+
+  /* ============ ANSWER BAR (full width bottom) ============ */
+  #answerBar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 20px; z-index: 7;
+    display: flex; gap: 10px; align-items: center;
+    background: rgba(0,0,0,.5); padding: 10px 18px; border-radius: 18px; backdrop-filter: blur(6px); }
+  #answerText { font-size: 20px; padding: 10px 14px; width: 340px; border-radius: 10px; border: none; outline: none; }
+  #answerText:focus { box-shadow: 0 0 0 2px #3498db; }
   button { cursor: pointer; border: none; border-radius: 10px; padding: 10px 16px; font-size: 16px; font-weight: 600; }
   #send { background: #2ecc71; color: #042; }
-  #mic { background: #f1c40f; }
+  #send:hover { background: #27ae60; }
+  #mic { background: #f1c40f; color: #333; }
   #mic.rec { background: #e74c3c; color: #fff; }
-  .hint { font-size: 13px; opacity: .6; }
-  /* Operator panel */
-  #op { position: absolute; top: 12px; right: 12px; z-index: 9; display: flex; gap: 8px; flex-wrap: wrap; max-width: 46vw; justify-content: flex-end; }
-  #op button { background: rgba(255,255,255,.16); color: #fff; font-size: 13px; padding: 8px 12px; }
-  #op button:hover { background: rgba(255,255,255,.3); }
-  #op .kbd { opacity: .6; font-size: 11px; }
-  #phaseTag { position: absolute; top: 12px; left: 12px; z-index: 9; background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 10px; font-size: 13px; }
-  #startOverlay { position: absolute; inset: 0; z-index: 30; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  .hint { font-size: 12px; opacity: .5; }
+
+  /* ============ START OVERLAY ============ */
+  #startOverlay { position: absolute; inset: 0; z-index: 30; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
   #startOverlay h1 { font-size: clamp(30px, 5.5vw, 68px); margin: 0; text-align: center; text-shadow: 0 4px 24px rgba(0,0,0,.6); }
   #startOverlay p { opacity: .8; font-size: 16px; max-width: 600px; text-align: center; }
   #startBtn { font-size: 26px; padding: 18px 48px; border-radius: 18px; background: linear-gradient(135deg, #2ecc71, #27ae60); color: #042; box-shadow: 0 10px 36px rgba(0,0,0,.45); }
-  .ghost { background: rgba(255,255,255,.14); color: #fff; font-size: 15px; padding: 12px 24px; }
-  /* Bảng Test STT / Engines */
+  #startBtn:hover { transform: scale(1.04); }
+  .ghost { background: rgba(255,255,255,.14); color: #fff; font-size: 15px; padding: 12px 24px; border-radius: 12px; }
+
+  /* ============ CONFETTI (full screen) ============ */
+  #confettiCanvas { position: absolute; inset: 0; z-index: 15; pointer-events: none; }
+
+  /* ============ FINALE TEXT (full screen overlay) ============ */
+  #finaleText { position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%) scale(0); z-index: 25;
+    font-size: clamp(36px, 6vw, 80px); font-weight: 900; text-align: center; pointer-events: none;
+    opacity: 0; transition: all .6s cubic-bezier(.34,1.56,.64,1); }
+  #finaleText.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #finaleText .rainbow-text { background: linear-gradient(90deg,#e74c3c,#e67e22,#f1c40f,#2ecc71,#3498db,#6366f1,#9b59b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  #finaleText .sub { display: block; font-size: .45em; font-weight: 600; -webkit-text-fill-color: #fff; margin-top: 8px; opacity: .8; }
+
+  /* ============ DIAG ============ */
   #diag { position: absolute; left: 12px; bottom: 60px; z-index: 40; width: 350px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15);
     padding: 14px 16px; border-radius: 14px; font-size: 13px; display: none; backdrop-filter: blur(4px); }
   #diag.show { display: block; }
   #diag h4 { margin: 0 0 10px; font-size: 15px; }
   #diag .row { margin: 4px 0; opacity: .92; line-height: 1.35; }
   #diag .eng { opacity: .6; font-size: 11px; margin-left: 4px; }
-  #testBtn { background: #f1c40f; margin-top: 10px; }
+  #testBtn { background: #f1c40f; margin-top: 10px; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
   #testBtn.rec { background: #e74c3c; color: #fff; }
   #testOut { margin-top: 10px; min-height: 22px; font-size: 16px; line-height: 1.4; }
 </style>
@@ -69,16 +128,37 @@
 </head>
 <body>
 <div id="stage">
+  <!-- START OVERLAY -->
   <div id="startOverlay">
     <h1>🌈 Cùng Koon Đi Tìm Cầu Vồng</h1>
     <p>Chào mừng các nhà thám hiểm nhí! Bấm để bắt đầu hành trình tìm lại 7 sắc màu cùng KOON.</p>
     <button id="startBtn" onclick="startShow()">▶ Bắt đầu</button>
     <button class="ghost" onclick="toggleDiag()">🧪 Test mic / STT</button>
   </div>
-  <div id="sky"></div>
-  <!-- 7 cung cầu vồng -->
-  <svg id="rainbow" viewBox="0 0 700 400"></svg>
 
+  <!-- TRỜI + SAO -->
+  <div id="sky"></div>
+  <div id="stars"></div>
+
+  <!-- === CỘT TRÁI: CÂU HỎI === -->
+  <div id="leftCol">
+    <div id="progressBar"></div>
+    <div id="phaseTag">—</div>
+    <div id="question"></div>
+    <div id="status"></div>
+    <div id="sttHeard"></div>
+  </div>
+
+  <!-- === CỘT PHẢI: CẦU VỒNG + KOON === -->
+  <div id="rightCol">
+    <svg id="rainbow" viewBox="0 0 700 400"></svg>
+    <div id="koon">
+      <canvas id="koonCanvas"></canvas>
+      <div class="face">🦊</div>
+    </div>
+  </div>
+
+  <!-- OPERATOR -->
   <div id="op">
     <button onclick="op('replay')">Đọc lại <span class="kbd">R</span></button>
     <button onclick="op('skip')">Bỏ qua <span class="kbd">S</span></button>
@@ -86,15 +166,8 @@
     <button onclick="op('restart')">Chạy lại <span class="kbd">Esc</span></button>
     <button onclick="toggleDiag()">🧪 Test STT</button>
   </div>
-  <div id="phaseTag">—</div>
 
-  <div id="koon">
-    <canvas id="koonCanvas"></canvas>
-    <div class="face">🦊</div>
-  </div>
-  <div id="question"></div>
-  <div id="status"></div>
-
+  <!-- ANSWER BAR -->
   <div id="answerBar">
     <input id="answerText" placeholder="Bé nói gì? (test gõ) hoặc nhấn 🎤" autocomplete="off" />
     <button id="mic" onclick="toggleMic()">🎤 Mic</button>
@@ -102,6 +175,13 @@
     <span class="hint">Enter = gửi</span>
   </div>
 
+  <!-- CONFETTI -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <!-- FINALE -->
+  <div id="finaleText"><span class="rainbow-text">🌈 CẦU VỒNG RỰC RỠ!</span><span class="sub">Cảm ơn các bạn nhé!</span></div>
+
+  <!-- DIAG -->
   <div id="diag">
     <h4>🧪 Test STT & Engines</h4>
     <div id="engines">đang tải…</div>
@@ -113,15 +193,17 @@
 <audio id="player" preload="auto"></audio>
 
 <script>
-const RAINBOW_HEX = ["#e74c3c","#e67e22","#f1c40f","#2ecc71","#3498db","#34495e","#9b59b6"];
+const RAINBOW_HEX = ["#e74c3c","#e67e22","#f1c40f","#2ecc71","#3498db","#6366f1","#9b59b6"];
+const RAINBOW_NAMES = ["Đỏ","Cam","Vàng","Xanh lá","Xanh dương","Chàm","Tím"];
 const player = document.getElementById('player');
 const koon = document.getElementById('koon');
 const qEl = document.getElementById('question');
 const statusEl = document.getElementById('status');
 const phaseTag = document.getElementById('phaseTag');
-const sky = document.getElementById('sky');
+const sttHeardEl = document.getElementById('sttHeard');
+const finaleEl = document.getElementById('finaleText');
 
-// Vẽ 7 cung cầu vồng
+// ============================== CẦU VỒNG SVG ==============================
 (function(){
   const svg = document.getElementById('rainbow');
   RAINBOW_HEX.forEach((hex, i) => {
@@ -137,39 +219,191 @@ const sky = document.getElementById('sky');
 function unlockHex(hex){ document.querySelectorAll('#rainbow path').forEach(p=>{ if(p.dataset.hex===hex) p.classList.add('on'); }); }
 function clearRainbow(){ document.querySelectorAll('#rainbow path').forEach(p=>p.classList.remove('on')); }
 
+// ============================== PROGRESS BAR ==============================
+(function(){
+  const bar = document.getElementById('progressBar');
+  RAINBOW_HEX.forEach((hex, i) => {
+    const orb = document.createElement('div');
+    orb.className = 'orb';
+    orb.id = 'orb-' + i;
+    orb.style.setProperty('--orb-color', hex);
+    bar.appendChild(orb);
+  });
+})();
+function orbDone(i){
+  const el = document.getElementById('orb-' + i);
+  if(el) el.classList.add('done');
+}
+
+// ============================== SAO NỀN ==============================
+(function(){
+  const stars = document.getElementById('stars');
+  for(let i = 0; i < 30; i++){
+    const s = document.createElement('div');
+    s.className = 'star';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 60 + '%';
+    s.style.setProperty('--dur', (2 + Math.random() * 3) + 's');
+    s.style.animationDelay = Math.random() * 3 + 's';
+    s.style.width = s.style.height = (1 + Math.random() * 2) + 'px';
+    stars.appendChild(s);
+  }
+})();
+
+// ============================== CONFETTI ==============================
+const confettiCanvas = document.getElementById('confettiCanvas');
+const ctx = confettiCanvas.getContext('2d');
+let confettiPieces = [];
+let confettiRunning = false;
+function resizeConfetti(){ confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeConfetti);
+resizeConfetti();
+
+function burstConfetti(count, colorSet){
+  const colors = colorSet || ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#fff','#ff6b9d'];
+  for(let i = 0; i < count; i++){
+    confettiPieces.push({
+      x: window.innerWidth/2 + (Math.random()-0.5)*300,
+      y: window.innerHeight * 0.2,
+      vx: (Math.random()-0.5) * 14,
+      vy: -Math.random() * 16 - 4,
+      w: 4 + Math.random() * 8,
+      h: 4 + Math.random() * 8,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rot: Math.random() * 360,
+      rotV: (Math.random()-0.5) * 8,
+      life: 1,
+      decay: 0.004 + Math.random() * 0.008,
+    });
+  }
+  if(!confettiRunning){ confettiRunning = true; renderConfetti(); }
+}
+function renderConfetti(){
+  ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  confettiPieces = confettiPieces.filter(p => p.life > 0);
+  for(const p of confettiPieces){
+    p.x += p.vx; p.vy += 0.22; p.y += p.vy; p.rot += p.rotV; p.life -= p.decay;
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.rotate(p.rot * Math.PI/180);
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    ctx.restore();
+  }
+  if(confettiPieces.length > 0) requestAnimationFrame(renderConfetti);
+  else confettiRunning = false;
+}
+
+// ============================== CHIME SOUND (Web Audio API) ==============================
+let chimeCtx = null;
+function getChimeCtx(){
+  if(!chimeCtx) chimeCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(chimeCtx.state === 'suspended') chimeCtx.resume();
+  return chimeCtx;
+}
+function playChime(kind){
+  try{
+    const ctx = getChimeCtx();
+    const now = ctx.currentTime;
+    if(kind === 'correct'){
+      // 3 nốt đi lên: C5→E5→G5 (ding ding ding vui)
+      [523.25, 659.25, 783.99].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, now + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + i * 0.12);
+        osc.stop(now + i * 0.12 + 0.3);
+      });
+    } else if(kind === 'finale'){
+      // 7 nốt — thang 7 màu, dài hơn
+      [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.22, now + i * 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.45);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + i * 0.15);
+        osc.stop(now + i * 0.15 + 0.45);
+      });
+    }
+  } catch(e){ /* audio fail = silent */ }
+}
+
+// ============================== WEBSOCKET ==============================
 const ws = new WebSocket((location.protocol==='https:'?'wss':'ws') + '://' + location.host + '/ws');
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   switch(m.type){
     case 'play_audio': playAudio(m.key); break;
-    case 'show_question': qEl.textContent = m.text; qEl.classList.add('show'); break;
-    case 'await_answer': statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)'; break;
-    case 'unlock_color': unlockHex(m.hex); koonHappy(); break;
-    case 'rainbow': statusEl.textContent = '🌈 Cầu vồng rực rỡ!'; clearRainbow(); RAINBOW_HEX.forEach(unlockHex); break;
-    case 'reset': clearRainbow(); qEl.classList.remove('show'); qEl.textContent=''; statusEl.textContent=''; break;
-    case 'state': phaseTag.textContent = `Giai đoạn: ${m.phase} · ${m.idx+1}/${m.total} · đã mở ${m.unlocked.length}`; break;
+    case 'show_question':
+      qEl.textContent = m.text;
+      qEl.style.setProperty('--q-color', m.hex || 'transparent');
+      qEl.classList.add('show', 'has-color');
+      break;
+    case 'await_answer':
+      statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)';
+      break;
+    case 'unlock_color':
+      unlockHex(m.hex);
+      koonHappy();
+      const ui = RAINBOW_HEX.indexOf(m.hex);
+      if(ui >= 0) orbDone(ui);
+      statusEl.textContent = '✅ ĐÚNG! Mảnh màu đã được tìm thấy!';
+      burstConfetti(60, [m.hex, '#ffd700', '#fff']);
+      playChime('correct');
+      break;
+    case 'rainbow':
+      statusEl.textContent = '🌈 Cầu vồng rực rỡ!';
+      qEl.classList.remove('show', 'has-color');
+      clearRainbow();
+      RAINBOW_HEX.forEach((h,i)=>{ unlockHex(h); orbDone(i); });
+      finaleEl.classList.add('show');
+      burstConfetti(150, RAINBOW_HEX);
+      playChime('finale');
+      setTimeout(() => { finaleEl.classList.remove('show'); }, 3500);
+      break;
+    case 'reset':
+      clearRainbow();
+      qEl.classList.remove('show', 'has-color');
+      qEl.textContent=''; statusEl.textContent=''; finaleEl.classList.remove('show');
+      sttHeardEl.classList.remove('show');
+      document.querySelectorAll('.orb').forEach(o => o.classList.remove('done', 'active'));
+      break;
+    case 'state':
+      phaseTag.textContent = `${m.phase} · ${m.idx+1}/${m.total} · mở ${m.unlocked.length}`;
+      document.querySelectorAll('.orb').forEach(o => o.classList.remove('active'));
+      const cur = document.getElementById('orb-' + m.idx);
+      if(cur && m.phase === 'ask') cur.classList.add('active');
+      break;
   }
 };
 
+// ============================== START ==============================
 function startShow(){
   document.getElementById('startOverlay').style.display = 'none';
-  ensureLipCtx();  // tạo+resume AudioContext trong gesture → decodeAudioData ổn định
-  // Prime audio: mở khóa autoplay bằng cú click (play mute rồi bỏ mute)
+  ensureLipCtx();
   player.muted = true;
   player.play().then(() => { player.muted = false; }).catch(() => { player.muted = false; });
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'start' }));
 }
 
+// ============================== AUDIO ==============================
 function playAudio(key){
   koon.classList.add('speaking');
-  qEl.classList.remove('show'); // ẩn câu hỏi cũ khi KOON nói (trừ lúc đọc câu hỏi)
-  const url = `/audio/${key}.mp3`;
+  const url = `/audio/${key}`;
   player.src = url;
   player.play().catch(err=>console.warn('play err', err));
-  decodeForLipSync(url);  // giải mã PCM để lip-sync
+  decodeForLipSync(url);
 }
 player.onended = () => { koon.classList.remove('speaking'); ws.send(JSON.stringify({type:'audio_ended'})); };
 
+// ============================== ANSWER ==============================
 function sendAnswer(){
   const t = document.getElementById('answerText').value.trim();
   if(!t) return;
@@ -179,6 +413,7 @@ function sendAnswer(){
 }
 document.getElementById('answerText').addEventListener('keydown', e=>{ if(e.key==='Enter') sendAnswer(); });
 
+// ============================== OPERATOR ==============================
 function op(action){ ws.send(JSON.stringify({type:'op', action})); }
 document.addEventListener('keydown', e=>{
   if(e.target.tagName==='INPUT') return;
@@ -186,24 +421,23 @@ document.addEventListener('keydown', e=>{
   if(map[e.key]) op(map[e.key]);
 });
 
-// ============ STT: Web Speech API của browser (Chrome=Google / Edge=Azure) — không cần server ============
+// ============================== STT (Web Speech API) ==============================
 function browserName(){
   const ua=navigator.userAgent;
-  if(/Edg\//.test(ua)) return 'Edge · Azure';
+  if(/Edg\//.test(ua)) return 'Edge • Azure';
   if(/OPR\//.test(ua)||/Opera/.test(ua)) return 'Opera';
-  if(/Chrome\//.test(ua)) return 'Chrome · Google';
+  if(/Chrome\//.test(ua)) return 'Chrome • Google';
   if(/Firefox\//.test(ua)) return 'Firefox';
   if(/Safari\//.test(ua)) return 'Safari';
   return 'browser';
 }
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const STT_BROWSER = SpeechRecognition ? ('Web Speech API · '+browserName()) : null;
+const STT_BROWSER = SpeechRecognition ? ('Web Speech API • '+browserName()) : null;
 function engineLabel(e){ return e==='web-speech' ? STT_BROWSER : (e||'?'); }
 
-let activeSTT=null; // {engine, stop}
+let activeSTT=null;
 function stopSTT(){ if(activeSTT) activeSTT.stop(); }
 
-// Chạy 1 lần nhận diện. h = {onInterim, onFinal(text,engine), onError, onEnd}
 function recognizeOnce(h){
   if(!SpeechRecognition){
     h.onError&&h.onError('Trình duyệt không hỗ trợ Web Speech API — dùng Chrome hoặc Edge');
@@ -230,24 +464,32 @@ function recognizeOnce(h){
   return ctrl;
 }
 
-// Mic trong game → gửi đáp án vào WS (kèm engine để server log)
+// Mic trong game
 function toggleMic(){
   if(activeSTT){ stopSTT(); return; }
   const btn=document.getElementById('mic');
   btn.classList.add('rec'); btn.textContent='⏹ Dừng';
   statusEl.textContent='👂 đang nghe...';
+  sttHeardEl.classList.remove('show');
   recognizeOnce({
-    onInterim:t=> statusEl.textContent = t ? `… ${t}` : '👂 đang nghe...',
+    onInterim:t=> {
+      statusEl.textContent = t ? `… ${t}` : '👂 đang nghe...';
+      sttHeardEl.textContent = t ? `KOON nghe được: "${t}"` : '';
+      if(t) sttHeardEl.classList.add('show');
+    },
     onFinal:(text,engine)=>{
       statusEl.textContent = text ? `bé nói: "${text}"` : '(không nghe rõ — thử lại)';
+      sttHeardEl.textContent = text ? `KOON nghe được: "${text}"` : '';
+      if(text) sttHeardEl.classList.add('show');
       if(text) ws.send(JSON.stringify({type:'answer', text, stt:engine}));
+      setTimeout(() => sttHeardEl.classList.remove('show'), 4000);
     },
     onError:e=> statusEl.textContent='lỗi STT: '+e+(e==='not-allowed'?' (cấp quyền mic cho site)':''),
     onEnd:()=>{ btn.classList.remove('rec'); btn.textContent='🎤 Mic'; },
   });
 }
 
-// Mic test (độc lập, KHÔNG gửi vào game — chỉ xem kết quả + engine)
+// Test mic
 function toggleTestMic(){
   if(activeSTT){ stopSTT(); return; }
   const btn=document.getElementById('testBtn');
@@ -264,7 +506,7 @@ function toggleTestMic(){
   });
 }
 
-// Bảng chẩn đoán: hiển thị TTS/LLM/STT đang dùng cái gì
+// Diagnostic
 async function loadDiag(){
   const el=document.getElementById('engines');
   let tts='…', llm='…';
@@ -281,18 +523,20 @@ async function loadDiag(){
 }
 function toggleDiag(){ const d=document.getElementById('diag'); d.classList.toggle('show'); if(d.classList.contains('show')) loadDiag(); }
 
-// ============ Live2D avatar (mao_pro) + lip-sync theo amplitude giọng TTS ============
-let l2d = null;                 // {app, model, audioBuffer, ctx, mouth}
-const LIPSYNC_PARAM = 'ParamA'; // mao_pro: LipSync group → ParamA
-let lipCtx = null;        // AudioContext để decodeAudioData
-// State = LAppWavFileHandler (port y nguyên từ Open-LLM-VTuber)
+// ============================== Live2D + Lip-Sync ==============================
+let l2d = null;
+const LIPSYNC_PARAM = 'ParamA';
+let lipCtx = null;
 let lipPcm = null, lipSr = 0, lipTotal = 0, lipUserTime = 0, lipOffset = 0;
 
-// KOON vui khi mở khoá mảnh màu (đáp án đúng)
 function koonHappy(){
   if(!l2d) return;
-  try{ l2d.model.expression('exp_01'); }catch(e){} // biểu cảm vui (chỉnh exp_0X khi test)
-  try{ l2d.model.motion(); }catch(e){}             // 1 motion ngẫu nhiên
+  try{ l2d.model.expression('exp_05'); }catch(e){}
+  try{ l2d.model.motion(''); }catch(e){}
+  setTimeout(() => {
+    if(!l2d) return;
+    try{ l2d.model.motion('Idle'); }catch(e){}
+  }, 3000);
 }
 
 async function initLive2D(){
@@ -302,77 +546,75 @@ async function initLive2D(){
   const canvas = document.getElementById('koonCanvas');
   if(!canvas) return;
   try{
-    const W = canvas.clientWidth || 320, H = canvas.clientHeight || 320;
+    const koonDiv = document.getElementById('koon');
+    const W = koonDiv.clientWidth || 420;
+    const H = koonDiv.clientHeight || 420;
+    canvas.width = W; canvas.height = H;
     const app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, antialias: true, width: W, height: H });
     const model = await PIXI.live2d.Live2DModel.from('/live2d/mao_pro/runtime/mao_pro.model3.json');
     app.stage.addChild(model);
 
-    // Fit model vào khung #koon, canh giữa
     const fit = () => {
-      const s = Math.min(W / model.internalModel.width, H / model.internalModel.height);  // fill hết khung
+      const cw = koonDiv.clientWidth || W;
+      const ch = koonDiv.clientHeight || H;
+      canvas.width = cw; canvas.height = ch;
+      app.renderer.resize(cw, ch);
+      const s = Math.min(cw / model.internalModel.width, ch / model.internalModel.height);
       model.scale.set(s);
-      model.x = (W - model.width) / 2;
-      model.y = (H - model.height) / 2;
+      model.x = (cw - model.width) / 2;
+      model.y = (ch - model.height) / 2;
     };
     fit();
     window.addEventListener('resize', fit);
 
     try{ model.motion('Idle'); }catch(e){}
-    koon.classList.add('live2d');   // ẩn emoji 🦊
+    koon.classList.add('live2d');
     l2d = { app, model };
-    // Lip-sync: PATCH internalModel.update để set ParamA SAU update (trước render).
-    // Set trong app.ticker hay setParameterValueById tay đều bị loadParameters() reset mỗi frame → miệng đứng im.
+
     const coreModel = model.internalModel.coreModel;
-    // Hook ĐÚNG phase: event 'beforeModelUpdate' chạy SAU mọi effect (blink/focus/breath/physics),
-    // TRƯỚC model.update() (bake param vào render). Set ParamA ở đây → được bake → HIỆN.
-    // (Set trong internalModel.update hay app.ticker đều bị model.loadParameters() ở cuối update reset.)
     let lastT = performance.now();
     model.internalModel.on('beforeModelUpdate', () => {
       const now = performance.now();
       let dts = (now - lastT) / 1000; lastT = now;
-      if(dts > 0.1) dts = 0.1;                             // kẹp tránh nhảy khi tab nền
+      if(dts > 0.1) dts = 0.1;
       let value = 0;
       if(lipPcm && lipOffset < lipTotal){
-        lipUserTime += dts;                                // port LAppWavFileHandler.update
+        lipUserTime += dts;
         let goalOffset = Math.floor(lipUserTime * lipSr);
         if(goalOffset > lipTotal) goalOffset = lipTotal;
         let sum = 0, cnt = 0;
         for(let i = lipOffset; i < goalOffset; i++){ sum += lipPcm[i] * lipPcm[i]; cnt++; }
         const rms = cnt ? Math.sqrt(sum / cnt) : 0;
         lipOffset = goalOffset;
-        value = Math.min(1.0, rms * 1.5);                 // boost ×1.5 (như OLLV)
+        value = Math.min(1.0, rms * 1.5);
       }
       try{ coreModel.setParameterValueById(LIPSYNC_PARAM, value); }catch(e){}
     });
-    console.log('[Live2D] KOON = mao_pro, lip-sync hook beforeModelUpdate');
+    console.log('[Live2D] KOON = mao_pro, lip-sync OK');
   }catch(err){
     console.warn('[Live2D] load lỗi → giữ emoji 🦊:', err && err.message || err);
   }
 }
 
-// Giải mã PCM của audio để lip-sync (giống Open-LLM-VTuber: RMS theo currentTime).
-// Playback vẫn do <audio id=player>; analysis đọc PCM đã decode → chính xác, không cần analyser/MediaElementSource.
 function ensureLipCtx(){
   if(lipCtx) return;
   try{
     lipCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(lipCtx.state === 'suspended') lipCtx.resume();
-    console.log('[Live2D] lipCtx sẵn sàng (state=%s)', lipCtx.state);
   }catch(e){ console.warn('[Live2D] tạo AudioContext lỗi:', e); }
 }
 async function decodeForLipSync(url){
   if(!lipCtx) ensureLipCtx();
   try{
     const resp = await fetch(url);
-    if(!resp.ok){ console.warn('[Live2D] fetch audio LỖI', resp.status, url); return; }
+    if(!resp.ok){ return; }
     const ab = await lipCtx.decodeAudioData(await resp.arrayBuffer());
     lipPcm = ab.getChannelData(0); lipSr = ab.sampleRate; lipTotal = lipPcm.length;
-    lipUserTime = 0; lipOffset = 0;   // reset handler (= LAppWavFileHandler.start)
-    console.log('[Live2D] PCM %.2fs ← %s', ab.duration, url);
-  }catch(err){ console.warn('[Live2D] decode LỖI:', err); }
+    lipUserTime = 0; lipOffset = 0;
+  }catch(err){ /* skip */ }
 }
 
-initLive2D();   // tải model ngay khi mở trang
+initLive2D();
 </script>
 </body>
 </html>

@@ -33,7 +33,7 @@ CHALLENGES = [
      "question_text": "Loài hoa nào luôn hướng về phía mặt trời?",
      "answer": "hoa hướng dương", "aliases": ["hướng dương", "huong duong"],
      "hint": "tên của loài hoa này đã nói lên đặc điểm, nó luôn quay về phía mặt trời"},
-    {"n": 6, "color": "Chàm", "hex": "#34495e", "q": "q6_question", "right": "q6_right", "wrong": "q6_wrong",
+    {"n": 6, "color": "Chàm", "hex": "#6366f1", "q": "q6_question", "right": "q6_right", "wrong": "q6_wrong",
      "question_text": "Mùa nào trong năm thường có thời tiết nóng nhất?",
      "answer": "mùa hè", "aliases": ["hè", "mua he"],
      "hint": "mùa nóng nhất trong năm, các bạn được nghỉ học và đi chơi"},

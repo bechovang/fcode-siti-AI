@@ -24,6 +24,32 @@ Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng → giơ t
 - **Công nghệ**: Object recognition + bảng điểm real-time
 - **Thời lượng**: ~5 phút
 
+### UI/UX của Trò 1 — Các tính năng hiện tại
+
+```
+┌──────────── 48vw ────────┬─────── 52vw ────────┐
+│                          │                      │
+│  🔴🟠🟡🟢🔵🟣🟣        │   🌈🌈🌈 (cầu vồng)  │
+│  (thanh tiến trình)      │                      │
+│          ┌──────────┐    │                      │
+│          │ CÂU HỎI  │    │      🦊 KOON         │
+│          │ TO RÕ    │    │                      │
+│          └──────────┘    │                      │
+│  [status + STT heard]    │                      │
+├─────────────┴────────────┴──────────────────────┤
+│   [🎤 Mic] [Gửi]   Enter=gửi                    │
+└─────────────────────────────────────────────────┘
+```
+
+- **Layout 2 cột**: Câu hỏi bên trái (48vw), cầu vồng + KOON bên phải (52vw) — không đè lên nhau
+- **Progress bar 7 màu**: 7 orb dạng bóng đèn, sáng dần khi mở khoá, pulse khi active
+- **Feedback tối giản**: Không overlay to — chỉ status text + confetti (60-150 mảnh) + chime âm thanh (Web Audio API)
+- **Câu hỏi giữ nguyên**: Hiển thị xuyên suốt khi KOON đọc, không biến mất giữa chừng
+- **Finale**: Confetti lớn + "CẦU VỒNG RỰC RỠ!" gradient + 7-nốt nhạc thang âm
+- **Sao nền**: 30 ngôi sao twinkle nhẹ ở 60% trên màn hình
+- **KOON vui khi đúng**: Expression exp_05 + random motion (special_01-03), tự động về Idle sau 3s
+- **Operator**: KOON nghe được (hiện text dưới status, tự ẩn sau 4s) + phím tắt R/S/F/Esc
+
 ---
 
 ## 🚀 Hướng dẫn chạy (Step-by-Step)
