@@ -48,6 +48,17 @@
   #startOverlay h1 { font-size: clamp(30px, 5.5vw, 68px); margin: 0; text-align: center; text-shadow: 0 4px 24px rgba(0,0,0,.6); }
   #startOverlay p { opacity: .8; font-size: 16px; max-width: 600px; text-align: center; }
   #startBtn { font-size: 26px; padding: 18px 48px; border-radius: 18px; background: linear-gradient(135deg, #2ecc71, #27ae60); color: #042; box-shadow: 0 10px 36px rgba(0,0,0,.45); }
+  .ghost { background: rgba(255,255,255,.14); color: #fff; font-size: 15px; padding: 12px 24px; }
+  /* Bảng Test STT / Engines */
+  #diag { position: absolute; left: 12px; bottom: 60px; z-index: 40; width: 350px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15);
+    padding: 14px 16px; border-radius: 14px; font-size: 13px; display: none; backdrop-filter: blur(4px); }
+  #diag.show { display: block; }
+  #diag h4 { margin: 0 0 10px; font-size: 15px; }
+  #diag .row { margin: 4px 0; opacity: .92; line-height: 1.35; }
+  #diag .eng { opacity: .6; font-size: 11px; margin-left: 4px; }
+  #testBtn { background: #f1c40f; margin-top: 10px; }
+  #testBtn.rec { background: #e74c3c; color: #fff; }
+  #testOut { margin-top: 10px; min-height: 22px; font-size: 16px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -56,6 +67,7 @@
     <h1>🌈 Cùng Koon Đi Tìm Cầu Vồng</h1>
     <p>Chào mừng các nhà thám hiểm nhí! Bấm để bắt đầu hành trình tìm lại 7 sắc màu cùng KOON.</p>
     <button id="startBtn" onclick="startShow()">▶ Bắt đầu</button>
+    <button class="ghost" onclick="toggleDiag()">🧪 Test mic / STT</button>
   </div>
   <div id="sky"></div>
   <!-- 7 cung cầu vồng -->
@@ -66,6 +78,7 @@
     <button onclick="op('skip')">Bỏ qua <span class="kbd">S</span></button>
     <button onclick="op('force_correct')">Ép đúng <span class="kbd">F</span></button>
     <button onclick="op('restart')">Chạy lại <span class="kbd">Esc</span></button>
+    <button onclick="toggleDiag()">🧪 Test STT</button>
   </div>
   <div id="phaseTag">—</div>
 
@@ -78,6 +91,13 @@
     <button id="mic" onclick="toggleMic()">🎤 Mic</button>
     <button id="send" onclick="sendAnswer()">Gửi</button>
     <span class="hint">Enter = gửi</span>
+  </div>
+
+  <div id="diag">
+    <h4>🧪 Test STT & Engines</h4>
+    <div id="engines">đang tải…</div>
+    <button id="testBtn" onclick="toggleTestMic()">🎤 Test mic</button>
+    <div id="testOut"></div>
   </div>
 </div>
 
@@ -154,31 +174,100 @@ document.addEventListener('keydown', e=>{
   if(map[e.key]) op(map[e.key]);
 });
 
-// Mic (placeholder — sẽ nối STT PhoWhisper ở /asr)
-let rec=false, mediaRec=null;
-async function toggleMic(){
-  const btn=document.getElementById('mic');
-  if(rec){ mediaRec.stop(); return; }
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-    mediaRec = new MediaRecorder(stream);
-    const chunks=[];
-    mediaRec.ondataavailable = e=>chunks.push(e.data);
-    mediaRec.onstop = async ()=>{
-      rec=false; btn.classList.remove('rec'); btn.textContent='🎤 Mic';
-      const blob=new Blob(chunks,{type:'audio/webm'});
-      statusEl.textContent='🎧 đang nhận diện giọng nói...';
-      try{
-        const r = await fetch('/asr',{method:'POST', body: blob});
-        const j = await r.json();
-        const text=(j.text||'').trim();
-        statusEl.textContent = text ? `bé nói: "${text}"` : '(không nghe rõ — thử lại)';
-        if(text) ws.send(JSON.stringify({type:'answer', text}));
-      }catch(e){ statusEl.textContent='lỗi STT: '+e.message; }
-    };
-    mediaRec.start(); rec=true; btn.classList.add('rec'); btn.textContent='⏹ Dừng';
-  }catch(err){ statusEl.textContent='Không truy cập được mic: '+err.message; }
+// ============ STT: Web Speech API của browser (Chrome=Google / Edge=Azure) — không cần server ============
+function browserName(){
+  const ua=navigator.userAgent;
+  if(/Edg\//.test(ua)) return 'Edge · Azure';
+  if(/OPR\//.test(ua)||/Opera/.test(ua)) return 'Opera';
+  if(/Chrome\//.test(ua)) return 'Chrome · Google';
+  if(/Firefox\//.test(ua)) return 'Firefox';
+  if(/Safari\//.test(ua)) return 'Safari';
+  return 'browser';
 }
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const STT_BROWSER = SpeechRecognition ? ('Web Speech API · '+browserName()) : null;
+function engineLabel(e){ return e==='web-speech' ? STT_BROWSER : (e||'?'); }
+
+let activeSTT=null; // {engine, stop}
+function stopSTT(){ if(activeSTT) activeSTT.stop(); }
+
+// Chạy 1 lần nhận diện. h = {onInterim, onFinal(text,engine), onError, onEnd}
+function recognizeOnce(h){
+  if(!SpeechRecognition){
+    h.onError&&h.onError('Trình duyệt không hỗ trợ Web Speech API — dùng Chrome hoặc Edge');
+    h.onEnd&&h.onEnd();
+    return null;
+  }
+  const ctrl={ engine:'web-speech', _rec:null, stop(){ if(this._rec){try{this._rec.stop();}catch(e){}} } };
+  activeSTT=ctrl;
+  try{
+    const r=new SpeechRecognition();
+    r.lang='vi-VN'; r.continuous=false; r.interimResults=true;
+    ctrl._rec=r;
+    r.onstart=()=> h.onInterim&&h.onInterim('');
+    r.onresult=(e)=>{
+      let interim='', final='';
+      for(let i=e.resultIndex;i<e.results.length;i++){ const res=e.results[i]; if(res.isFinal) final=res[0].transcript; else interim+=res[0].transcript; }
+      if(final) h.onFinal&&h.onFinal(final.trim(),'web-speech');
+      else if(interim) h.onInterim&&h.onInterim(interim);
+    };
+    r.onerror=(ev)=> h.onError&&h.onError(ev.error);
+    r.onend=()=>{ activeSTT=null; h.onEnd&&h.onEnd(); };
+    r.start();
+  }catch(err){ activeSTT=null; h.onError&&h.onError('start: '+err.message); h.onEnd&&h.onEnd(); }
+  return ctrl;
+}
+
+// Mic trong game → gửi đáp án vào WS (kèm engine để server log)
+function toggleMic(){
+  if(activeSTT){ stopSTT(); return; }
+  const btn=document.getElementById('mic');
+  btn.classList.add('rec'); btn.textContent='⏹ Dừng';
+  statusEl.textContent='👂 đang nghe...';
+  recognizeOnce({
+    onInterim:t=> statusEl.textContent = t ? `… ${t}` : '👂 đang nghe...',
+    onFinal:(text,engine)=>{
+      statusEl.textContent = text ? `bé nói: "${text}"` : '(không nghe rõ — thử lại)';
+      if(text) ws.send(JSON.stringify({type:'answer', text, stt:engine}));
+    },
+    onError:e=> statusEl.textContent='lỗi STT: '+e+(e==='not-allowed'?' (cấp quyền mic cho site)':''),
+    onEnd:()=>{ btn.classList.remove('rec'); btn.textContent='🎤 Mic'; },
+  });
+}
+
+// Mic test (độc lập, KHÔNG gửi vào game — chỉ xem kết quả + engine)
+function toggleTestMic(){
+  if(activeSTT){ stopSTT(); return; }
+  const btn=document.getElementById('testBtn');
+  const out=document.getElementById('testOut');
+  btn.classList.add('rec'); btn.textContent='⏹ Dừng';
+  out.textContent='👂 đang nghe...';
+  recognizeOnce({
+    onInterim:t=> out.textContent = t ? `… ${t}` : '👂 đang nghe...',
+    onFinal:(text,engine)=> out.innerHTML = text
+      ? `✅ "<b>${text}</b>" <span class="eng">${engineLabel(engine)}</span>`
+      : '⚠️ không nghe rõ — thử lại',
+    onError:e=> out.textContent='❌ lỗi: '+e,
+    onEnd:()=>{ btn.classList.remove('rec'); btn.textContent='🎤 Test mic'; },
+  });
+}
+
+// Bảng chẩn đoán: hiển thị TTS/LLM/STT đang dùng cái gì
+async function loadDiag(){
+  const el=document.getElementById('engines');
+  let tts='…', llm='…';
+  try{
+    const h=await (await fetch('/health')).json();
+    tts = h.tts ? `✅ Kokoro (${h.tts_voice})` : '❌ Kokoro chưa cài';
+    llm = h.llm ? `✅ ${h.llm_model||'OpenRouter'}` : '⚠️ Tắt (fuzzy match)';
+  }catch(e){ tts=llm='❌ server không phản hồi'; }
+  const sttBr = STT_BROWSER ? `✅ ${STT_BROWSER}` : '⚠️ không hỗ trợ — cần Chrome/Edge';
+  el.innerHTML =
+    `<div class="row">TTS: <b>${tts}</b></div>`+
+    `<div class="row">LLM judge: <b>${llm}</b></div>`+
+    `<div class="row">STT: <b>${sttBr}</b></div>`;
+}
+function toggleDiag(){ const d=document.getElementById('diag'); d.classList.toggle('show'); if(d.classList.contains('show')) loadDiag(); }
 </script>
 </body>
 </html>

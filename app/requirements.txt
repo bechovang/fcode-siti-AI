@@ -3,8 +3,7 @@ fastapi
 uvicorn[standard]
 openai            # OpenRouter (OpenAI-compatible) — chấm đáp án
 rapidfuzz         # fuzzy match dự phòng khi chưa có LLM
+soundfile         # ghi file WAV từ Kokoro TTS
 
-# === Cắm ở bước sau ===
-# faster-whisper   # STT tiếng Việt (PhoWhisper qua model_path) — nghe trẻ nói
-# edge-tts         # TTS live cho câu động (câu cố định đã pre-cache)
-# Audio DSP khử ồn: deepfilternet hoặc noisereduce (cho venue ồn)
+# STT chạy ở browser (Web Speech API: Chrome=Edge) — không cần package Python.
+# TTS động: Kokoro Vietnamese — cài riêng:  pip install -e "ref/Kokoro-Vietnamese[onnx]"

@@ -2,11 +2,10 @@
 - Kokoro Vietnamese TTS (ONNX CPU): sinh giọng nói động, không cần pre-cache.
 - KOON nói tự nhiên, lễ phép, đúng ngữ cảnh với từng câu trả lời của trẻ.
 - 7 thử thách, chấm đáp án LLM/fuzzy, operator controls.
+- STT chạy ở browser (Web Speech API: Chrome=Google / Edge=Azure) — không cần model server.
 
 Backlog:
-  - STT (PhoWhisper): frontend stream audio -> endpoint /asr.
   - Live2D KOON: frontend (pixi-live2d-display), sync lip-sync với audio.
-  - Khử ồn DSP: tiền xử lý audio trước khi vào STT.
 """
 import os
 import sys
@@ -19,7 +18,7 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import koon_data as K
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
@@ -102,35 +101,10 @@ def judge(text: str, ch: dict) -> bool:
     return judge_fuzzy(text, ch)
 
 
-# ---------- STT (faster-whisper, tiếng Việt) ----------
-_whisper = None
-
-
-def get_whisper():
-    global _whisper
-    if _whisper is None:
-        from faster_whisper import WhisperModel
-        mname = os.environ.get("WHISPER_MODEL", "diepho/PhoWhisper-small-ct2")
-        log.info("Load Whisper '%s' (CPU int8) — ~20s lần đầu...", mname)
-        _whisper = WhisperModel(mname, device="cpu", compute_type="int8")
-        log.info("Whisper sẵn sàng.")
-    return _whisper
-
-
-def transcribe_path(path: str) -> str:
-    m = get_whisper()
-    vocab = ", ".join(ch["answer"] for ch in K.CHALLENGES)
-    prompt = f"Trò chơi đố vui cho trẻ em tiếng Việt. Một số từ thường gặp: {vocab}."
-    segs, _ = m.transcribe(
-        path,
-        language="vi",
-        beam_size=1,
-        vad_filter=True,
-        initial_prompt=prompt,
-        condition_on_previous_text=False,
-        no_speech_threshold=0.6,
-    )
-    return " ".join(s.text for s in segs).strip()
+# ---------- STT ----------
+# Nhận diện giọng nói chạy ở BROWSER qua Web Speech API (Chrome=Google / Edge=Azure).
+# Không cần model hay endpoint server → không download, khởi động nhẹ, trễ thấp.
+log.info("STT: browser Web Speech API (Chrome=Google / Edge=Azure)")
 
 
 # ---------- app ----------
@@ -344,6 +318,7 @@ async def ws_endpoint(ws: WebSocket):
                 s._audio_done.set()
             elif t == "answer":
                 s._answer = msg.get("text", "")
+                log.info("Answer [%s]: '%s'", msg.get("stt") or "typed", s._answer)
                 s._answer_ready.set()
             elif t == "op":
                 a = msg.get("action")
@@ -386,28 +361,10 @@ async def health():
         "tts": TTS_AVAILABLE,
         "tts_voice": os.environ.get("KOON_VOICE", "mai_linh"),
         "tts_model": "Kokoro-Vietnamese (ONNX CPU)",
+        "stt": "browser (Web Speech API)",
         "llm": bool(llm),
+        "llm_model": OR_MODEL if llm else None,
     }
-
-
-@app.post("/asr")
-async def asr(req: Request):
-    """Nhận audio (webm/wav/mp3 từ mic) → text tiếng Việt."""
-    data = await req.body()
-    if not data:
-        return JSONResponse({"text": "", "error": "no audio"}, status_code=400)
-    tmp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
-    tmp.write(data)
-    tmp.close()
-    try:
-        text = await asyncio.to_thread(transcribe_path, tmp.name)
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except OSError:
-            pass
-    log.info("ASR -> '%s'", text)
-    return {"text": text}
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ Dự án xây dựng phần mềm AI cho phần giao lưu/giải trí trên sân
 Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách** để tìm lại 7 sắc màu cầu vồng.
 
 - **Cách chơi**: KOON đọc câu đố → trẻ trả lời (micro hoặc gõ chữ) → LLM chấm đúng/sai → đúng: mở khóa mảnh màu, sai: KOON gợi ý → thử lại
-- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → PhoWhisper STT
+- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → STT bằng Web Speech API của browser (Chrome=Google / Edge=Azure)
 - **Thời lượng**: ~10–11 phút
 - **Server**: FastAPI + WebSocket (`app/server.py`)
 
@@ -33,9 +33,11 @@ Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng → giơ t
 | Thành phần | Yêu cầu |
 |---|---|
 | **Python** | ≥ 3.10 |
-| **RAM** | ≥ 8GB (khuyến nghị 16GB+) |
+| **Trình duyệt** | **Chrome hoặc Edge** (cần Web Speech API cho mic) |
+| **Mạng** | Cần internet (STT gửi audio lên Google/Azure) |
+| **RAM** | ≥ 4GB (khuyến nghị 8GB+) |
 | **CPU** | Đa lõi (TTS chạy ONNX CPU, ~5x realtime) |
-| **Ổ cứng** | ~5GB trống (cho model TTS + Whisper) |
+| **Ổ cứng** | ~2GB trống (cho model TTS Kokoro) |
 | **HĐH** | Windows (có thể chạy Linux/macOS) |
 
 ### Bước 1: Clone repo
@@ -78,7 +80,7 @@ pip install -e "ref/Kokoro-Vietnamese[onnx]"
 ### Bước 5: Cài các dependencies còn lại
 
 ```bash
-pip install fastapi uvicorn openai rapidfuzz soundfile faster-whisper
+pip install fastapi uvicorn openai rapidfuzz soundfile
 ```
 
 ### Bước 6: Thiết lập API keys
@@ -107,12 +109,18 @@ Bạn sẽ thấy log:
 INFO TTS temp dir: C:\Users\...\koon_tts_xxx
 INFO LLM judge: OpenRouter openai/gpt-4o-mini
 INFO Kokoro TTS sẵn sàng (giọng mai_linh, device=cpu)
+INFO STT: browser Web Speech API (Chrome=Google / Edge=Azure)
 INFO Uvicorn running on http://0.0.0.0:8000
 ```
 
-### Bước 8: Mở trình duyệt
+### Bước 8: Mở trình duyệt (Chrome hoặc Edge)
 
-Vào **http://localhost:8000** → bấm **"Bắt đầu"** → KOON sẽ nói chuyện và đặt câu hỏi!
+Vào **http://localhost:8000** bằng **Chrome/Edge** (cần Web Speech API cho mic).
+
+- Bấm **"🧪 Test mic / STT"** để kiểm tra nhận diện giọng nói trước khi chơi.
+- Bấm **"Bắt đầu"** → KOON sẽ nói chuyện và đặt câu hỏi!
+
+> ⚠️ STT cần **internet** (audio gửi lên Google/Azure). Nếu truy cập bằng IP thay vì `localhost` (vd `http://192.168.x.x:8000`) thì phải dùng **HTTPS**, nếu không browser sẽ chặn mic.
 
 ---
 
@@ -158,7 +166,6 @@ set OR_MODEL=google/gemini-2.0-flash-001
 | `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS (14 giọng VN) |
 | `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM judge |
 | `OR_MODEL` | `openai/gpt-4o-mini` | ❌ | Model LLM trên OpenRouter |
-| `WHISPER_MODEL` | `diepho/PhoWhisper-small-ct2` | ❌ | Model ASR tiếng Việt |
 
 ---
 
@@ -169,8 +176,7 @@ set OR_MODEL=google/gemini-2.0-flash-001
 | `/` | GET | Trang chủ (giao diện game) |
 | `/ws` | WebSocket | Kết nối game real-time |
 | `/audio/{key}` | GET | Lấy file audio (WAV từ TTS hoặc MP3 cached) |
-| `/asr` | POST | Nhận audio → trả text tiếng Việt |
-| `/health` | GET | Kiểm tra trạng thái server |
+| `/health` | GET | Kiểm tra trạng thái server (TTS/LLM/STT) |
 
 ### WebSocket Messages
 
@@ -190,7 +196,7 @@ set OR_MODEL=google/gemini-2.0-flash-001
 ```json
 {"type": "start"}
 {"type": "audio_ended"}
-{"type": "answer", "text": "dưa hấu"}
+{"type": "answer", "text": "dưa hấu", "stt": "web-speech"}   // "stt": "web-speech" (mic) hoặc bỏ trống (gõ tay)
 {"type": "op", "action": "skip"}
 ```
 
@@ -227,19 +233,16 @@ set OR_MODEL=google/gemini-2.0-flash-001
 ### Pipeline xử lý
 
 ```
-                   ┌─────────────────────────────────────┐
-                   │         FastAPI Server               │
-                   │                                     │
-  ┌──────┐  WS   ┌▼────────┐  text  ┌──────────┐  Đ/S  ┌────────┐
-  │Client│◄─────►│Session  │◄──────►│LLM Judge │◄─────►│KOON    │
-  │(Web) │       │Flow     │        │(OpenAI/  │       │Script  │
-  └──────┘       └──┬──────┘        │ Fuzzy)   │       └───┬────┘
-                    │               └──────────┘           │
-                    │ audio                                │ text
-               ┌────▼─────┐                         ┌──────▼─────┐
-               │/audio    │                         │Kokoro TTS  │
-               │endpoint  │                         │(ONNX CPU)  │
-               └──────────┘                         └────────────┘
+┌──────────────────────────┐        ┌──────────────────────────────┐
+│ Client (Chrome / Edge)   │  WS    │ FastAPI Server                │
+│                          │◄──────►│                              │
+│ 🎤 Mic → Web Speech API  │ text   │  Session Flow (7 thử thách)   │
+│   nhận diện tiếng Việt   │───────►│      │                       │
+│                          │        │      ├─► LLM Judge (Đ/S)      │
+│ 🔊 <audio> phát TTS      │        │      │   (OpenRouter / Fuzzy) │
+│   từ /audio/{key}        │◄───────│      └─► Kokoro TTS → WAV     │
+└──────────────────────────┘ audio  │           (ONNX CPU)          │
+                                    └──────────────────────────────┘
 ```
 
 ### TTS Performance
@@ -271,13 +274,14 @@ taskkill /PID <PID> /F
 
 Có. Server sẽ dùng **fuzzy match** (so khớp chữ cái) để chấm đáp án. Kém chính xác hơn LLM nhưng vẫn hoạt động.
 
-### Lỗi "faster-whisper" không cài
+### Mic / STT không nhận giọng nói
 
-```bash
-pip install faster-whisper
-```
-
-Model PhoWhisper (~2GB) sẽ tự động download lần đầu.
+- Dùng **Chrome hoặc Edge** (Firefox/Safari có thể không hỗ trợ Web Speech API).
+- Cấp quyền mic cho site (icon khoá/mic góc trình duyệt).
+- Cần **internet** (STT gửi audio lên Google/Azure).
+- Nếu truy cập bằng IP thay vì `localhost` → phải dùng **HTTPS** (browser chỉ cho phép mic trên localhost hoặc HTTPS).
+- Bấm **"🧪 Test mic / STT"** ở màn start để kiểm tra nhanh — kết quả hiện kèm engine đang dùng.
+- Trên sân khấu nếu STT vẫn nhận sai: operator bấm **F (Ép đúng)** để KOON tiếp tục.
 
 ### Giọng đọc bị "robot" / không tự nhiên
 
@@ -293,6 +297,6 @@ Hoặc dùng `storyvert` (giọng kể chuyện, chậm hơn nhưng cảm xúc h
 ## 📚 Tham khảo
 
 - [Kokoro Vietnamese](https://github.com/iamdinhthuan/Kokoro-Vietnamese) — TTS tiếng Việt ONNX CPU
+- [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) — STT trong browser (Chrome=Google / Edge=Azure)
 - [Pipecat](https://github.com/pipecat-ai/pipecat) — Real-time voice pipeline framework (future consideration)
-- [PhoWhisper](https://huggingface.co/diepho/PhoWhisper-small-ct2) — ASR tiếng Việt (CTranslate2)
 - [OpenRouter](https://openrouter.ai/) — Unified LLM API
