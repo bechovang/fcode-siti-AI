@@ -42,6 +42,7 @@ Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng → giơ t
 ```
 
 - **Layout 2 cột**: Câu hỏi bên trái (48vw), cầu vồng + KOON bên phải (52vw) — không đè lên nhau
+- **KOON to + crop**: Container min(560px, 52vh), scale 1.8x, shift Y crop từ đầu gối trở lên (half-body)
 - **Progress bar 7 màu**: 7 orb dạng bóng đèn, sáng dần khi mở khoá, pulse khi active
 - **Feedback tối giản**: Không overlay to — chỉ status text + confetti (60-150 mảnh) + chime âm thanh (Web Audio API)
 - **Câu hỏi giữ nguyên**: Hiển thị xuyên suốt khi KOON đọc, không biến mất giữa chừng

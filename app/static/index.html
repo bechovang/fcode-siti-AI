@@ -62,7 +62,7 @@
   #rainbow path.on { opacity: 1; filter: drop-shadow(0 0 18px currentColor); }
 
   #koon { position: absolute; left: 50%; top: 48%; transform: translate(-50%, -50%);
-    width: min(420px, 40vh); height: min(420px, 40vh); z-index: 3;
+    width: min(560px, 52vh); height: min(560px, 52vh); z-index: 3;
     display: flex; align-items: center; justify-content: center;
     background: radial-gradient(circle, rgba(255,255,255,.08), transparent 60%); border-radius: 50%; }
   #koon .face { font-size: 90px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.4)); }
@@ -560,9 +560,9 @@ async function initLive2D(){
       canvas.width = cw; canvas.height = ch;
       app.renderer.resize(cw, ch);
       const s = Math.min(cw / model.internalModel.width, ch / model.internalModel.height);
-      model.scale.set(s);
+      model.scale.set(s * 1.8);  // zoom 1.8x → model to, từ đầu gối trở lên
       model.x = (cw - model.width) / 2;
-      model.y = (ch - model.height) / 2;
+      model.y = ch * 0.12;        // shift xuống, crop phần dưới
     };
     fit();
     window.addEventListener('resize', fit);
