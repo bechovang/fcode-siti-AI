@@ -5,6 +5,8 @@ import os
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 AUDIO_DIR = os.path.join(APP_DIR, "assets", "audio", "koon")
+VIDEO_DIR = os.path.join(APP_DIR, "assets", "video")
+RECAP_VIDEO = os.path.join(VIDEO_DIR, "recap.mp4")  # thả file vào đây khi có video recap thật
 
 # Trình tự intro (phát lần lượt, chờ mỗi câu kết thúc)
 INTRO = ["01_intro_greet", "02_intro_rainbow_q", "03_intro_lost_colors", "04_intro_rule", "05_intro_start"]

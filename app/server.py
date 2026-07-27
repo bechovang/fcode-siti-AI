@@ -121,6 +121,14 @@ if LIVE2D_AVAILABLE:
 else:
     log.warning("Live2D: thiếu ref/Open-LLM-VTuber/live2d-models — avatar dùng fallback emoji 🦊")
 
+# Recap video: serve từ app/assets/video (tạo dir khi có file recap.mp4)
+VIDEO_AVAILABLE = os.path.isdir(K.VIDEO_DIR)
+if VIDEO_AVAILABLE:
+    app.mount("/video", StaticFiles(directory=K.VIDEO_DIR), name="video")
+    log.info("Video recap: /video — có file" if os.path.isfile(K.RECAP_VIDEO) else "Video recap: /video (dir) — chưa có recap.mp4 → overlay fallback")
+else:
+    log.info("Video recap: chưa có app/assets/video → overlay fallback")
+
 
 # ---------- session / flow ----------
 class Session:
@@ -133,6 +141,7 @@ class Session:
         self._audio_done = asyncio.Event()
         self._answer = None
         self._answer_ready = asyncio.Event()
+        self._video_done = asyncio.Event()
         self._op = None  # skip | force_correct | replay
         # Duy trì các file TTS đang phát để cleanup sau
         self._active_tts_files: list[str] = []
@@ -172,6 +181,16 @@ class Session:
         except (OSError, ValueError):
             pass
 
+    async def play_or_say(self, key: str, fallback_text: str = ""):
+        """Phát pre-cache (.wav) nếu có → tức thì; không thì Kokoro động (chịu lỗi)."""
+        wav = os.path.join(K.AUDIO_DIR, f"{key}.wav")
+        if os.path.isfile(wav):
+            await self.play(key)
+        elif fallback_text:
+            await self.say(fallback_text)
+        else:
+            log.warning("play_or_say: thiếu %s.wav và không có fallback", key)
+
     async def state(self):
         await self.send({
             "type": "state",
@@ -209,11 +228,11 @@ async def run_flow(s: Session):
         # ---- INTRO ----
         s.phase = "intro"
         await s.state()
-        for line in INTRO_LINES:
+        for i, line in enumerate(INTRO_LINES):
             if s._op == "skip":
                 s._op = None
                 break
-            await s.say(line)
+            await s.play_or_say(K.INTRO[i], line)
 
         # ---- 7 THỬ THÁCH ----
         for i, ch in enumerate(K.CHALLENGES):
@@ -233,9 +252,9 @@ async def run_flow(s: Session):
                     break
 
                 # KOON đọc câu hỏi
-                await s.say(
-                    f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: "
-                    f"{ch['question_text']}"
+                await s.play_or_say(
+                    ch["q"],
+                    f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: {ch['question_text']}",
                 )
 
                 if s._op == "replay":
@@ -265,18 +284,17 @@ async def run_flow(s: Session):
                 await s.state()
 
                 if correct:
-                    await s.say(
-                        f"Chính xác! Đáp án là {ch['answer']}."
-                        f" Các bạn giỏi quá! Mảnh màu {ch['color'].lower()} đã được tìm thấy!"
+                    await s.play_or_say(
+                        ch["right"],
+                        f"Chính xác! Đáp án là {ch['answer']}. Các bạn giỏi quá! Mảnh màu {ch['color'].lower()} đã được tìm thấy!",
                     )
                     s.unlocked.append(ch["hex"])
                     await s.send({"type": "unlock_color", "hex": ch["hex"]})
                     break
                 else:
-                    await s.say(
-                        f"Chưa đúng rồi các bạn ơi!"
-                        f" Gợi ý nhé: {ch['hint']}."
-                        f" Các bạn thử lại xem?"
+                    await s.play_or_say(
+                        ch["wrong"],
+                        f"Chưa đúng rồi các bạn ơi! Gợi ý nhé: {ch['hint']}. Các bạn thử lại xem?",
                     )
 
         # ---- RAINBOW ----
@@ -288,12 +306,20 @@ async def run_flow(s: Session):
         # ---- RECAP ----
         s.phase = "recap"
         await s.state()
-        await s.say(OUTRO_RECAP)
+        await s.play_or_say(K.RECAP, OUTRO_RECAP)
+        await asyncio.sleep(0.5)
+        # Phát video recap nếu có file; không thì overlay animation fallback.
+        s._video_done.clear()
+        if os.path.isfile(K.RECAP_VIDEO):
+            await s.send({"type": "play_video", "url": "/video/recap.mp4"})
+        else:
+            await s.send({"type": "show_recap_overlay"})
+        await s._video_done.wait()
 
         # ---- DONE ----
         s.phase = "done"
         await s.state()
-        await s.say(OUTRO_GOODBYE)
+        await s.play_or_say(K.GOODBYE, OUTRO_GOODBYE)
         log.info("Hoàn thành show.")
 
     except asyncio.CancelledError:
@@ -325,6 +351,8 @@ async def ws_endpoint(ws: WebSocket):
                 await start()
             elif t == "audio_ended":
                 s._audio_done.set()
+            elif t in ("video_ended", "overlay_ended"):
+                s._video_done.set()
             elif t == "answer":
                 s._answer = msg.get("text", "")
                 log.info("Answer [%s]: '%s'", msg.get("stt") or "typed", s._answer)
@@ -349,13 +377,16 @@ async def index():
 
 @app.get("/audio/{key}")
 async def audio(key: str):
-    # Ưu tiên TTS WAV
     extless = key.replace(".wav", "").replace(".mp3", "")
+    # 1. TTS động (Kokoro say()) — temp WAV
     tts_path = os.path.join(TTS_DIR, f"{extless}.wav")
     if os.path.isfile(tts_path):
         return FileResponse(tts_path, media_type="audio/wav")
-
-    # Fallback: pre-cached MP3
+    # 2. Pre-cache Kokoro — .wav trong AUDIO_DIR
+    wav_path = os.path.join(K.AUDIO_DIR, f"{extless}.wav")
+    if os.path.isfile(wav_path):
+        return FileResponse(wav_path, media_type="audio/wav")
+    # 3. Backup edge-tts — .mp3 trong AUDIO_DIR
     mp3_path = os.path.join(K.AUDIO_DIR, f"{extless}.mp3")
     if os.path.isfile(mp3_path):
         return FileResponse(mp3_path, media_type="audio/mpeg")
