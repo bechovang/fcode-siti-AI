@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tìm Nắng — Bảng điểm (Master)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(circle at 50% 30%, #1b2a4a, #070b18); color: #fff;
+    font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
+  #stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+  #header { text-align: center; padding: 14px; }
+  #header h1 { margin: 0; font-size: clamp(22px, 3vw, 36px); }
+  #object { font-size: clamp(34px, 6vw, 72px); font-weight: 900; margin-top: 4px; min-height: 80px;
+    text-shadow: 0 4px 24px rgba(0,0,0,.6); transition: all .3s; }
+  #object.live { color: #ffd700; text-shadow: 0 0 30px rgba(255,215,0,.6); }
+  #roundTag { font-size: 16px; opacity: .7; }
+
+  #board { flex: 1; display: flex; gap: 18px; padding: 10px 28px 120px; align-items: stretch; }
+  .team { flex: 1; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 12px; background: rgba(255,255,255,.05); border: 4px solid var(--c);
+    transition: all .4s cubic-bezier(.34,1.56,.64,1); position: relative; }
+  .team .name { font-size: clamp(26px, 4vw, 48px); font-weight: 800; }
+  .team .score { font-size: clamp(56px, 10vw, 140px); font-weight: 900; line-height: 1; color: var(--c);
+    text-shadow: 0 0 30px color-mix(in srgb, var(--c) 50%, transparent); }
+  .team .order { font-size: clamp(18px, 2.5vw, 28px); font-weight: 700; min-height: 36px; opacity: .9; }
+  .team.finished { background: color-mix(in srgb, var(--c) 22%, transparent); box-shadow: 0 0 50px color-mix(in srgb, var(--c) 40%, transparent); transform: scale(1.02); }
+  .team.winner { background: linear-gradient(135deg, rgba(255,215,0,.3), rgba(255,152,0,.2)); box-shadow: 0 0 60px rgba(255,215,0,.5); }
+
+  #op { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; background: rgba(0,0,0,.55);
+    backdrop-filter: blur(6px); padding: 12px 18px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; }
+  #op .group { display: flex; gap: 6px; align-items: center; padding: 4px 10px; background: rgba(255,255,255,.06); border-radius: 12px; }
+  #op button { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px; padding: 8px 14px;
+    font-size: 14px; cursor: pointer; font-weight: 600; }
+  #op button:hover { background: rgba(255,255,255,.3); }
+  #op .team-btn { border-left: 4px solid var(--c); }
+  #op .start { background: linear-gradient(135deg, #2ecc71, #27ae60); color: #042; }
+  #op .danger { background: #c0392b; }
+  #op label { font-size: 11px; opacity: .6; text-transform: uppercase; }
+
+  #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
+  #winnerBanner { position: absolute; inset: 0; z-index: 25; display: none; flex-direction: column; align-items: center;
+    justify-content: center; pointer-events: none; }
+  #winnerBanner.show { display: flex; }
+  #winnerBanner .t { font-size: clamp(40px, 8vw, 110px); font-weight: 900; text-shadow: 0 6px 30px rgba(0,0,0,.6); }
+  #winnerBanner .sub { font-size: clamp(20px, 3vw, 36px); opacity: .85; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="header">
+    <h1>☀️ Tìm Nắng Cùng AI</h1>
+    <div id="object">Bấm Bắt đầu để chơi</div>
+    <div id="roundTag">vòng 0/6 · idle</div>
+  </div>
+  <div id="board"></div>
+
+  <div id="winnerBanner"><div class="t"></div><div class="sub"></div></div>
+  <canvas id="confetti"></canvas>
+
+  <div id="op">
+    <button class="start" onclick="op('start')">▶ Bắt đầu</button>
+    <button class="danger" onclick="op('restart')">↻ Chạy lại</button>
+    <button onclick="op('skip_round')">⏭ Bỏ qua vòng</button>
+    <button onclick="op('next_round')">⏭ Vòng kế</button>
+    <div class="group" id="teamOps"></div>
+  </div>
+</div>
+
+<audio id="player" preload="auto"></audio>
+
+<script>
+const TEAMS = [
+  { id: 'A', name: 'Đội A', color: '#e74c3c' },
+  { id: 'B', name: 'Đội B', color: '#3498db' },
+  { id: 'C', name: 'Đội C', color: '#2ecc71' },
+];
+const ORDER_WORD = { 1: '🥇 Nhất', 2: '🥈 Nhì', 3: '🥉 Ba' };
+
+const board = document.getElementById('board');
+const objectEl = document.getElementById('object');
+const roundTag = document.getElementById('roundTag');
+const player = document.getElementById('player');
+const winnerBanner = document.getElementById('winnerBanner');
+
+// Render team cards + operator buttons
+TEAMS.forEach(t => {
+  const card = document.createElement('div');
+  card.className = 'team'; card.id = 'team-' + t.id;
+  card.style.setProperty('--c', t.color);
+  card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
+  board.appendChild(card);
+
+  const g = document.getElementById('teamOps');
+  const wrap = document.createElement('div'); wrap.className = 'group';
+  wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
+    <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
+    <button onclick="op('add_point','${t.id}',1)">+1</button>
+    <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
+  g.appendChild(wrap);
+});
+
+const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/master');
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  switch (m.type) {
+    case 'scoreboard':
+      roundTag.textContent = `vòng ${m.round}/${m.rounds} · ${m.phase}`;
+      if (m.object) { objectEl.textContent = '🎯 ' + m.object; objectEl.classList.toggle('live', m.phase === 'playing'); }
+      else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
+      m.teams.forEach(t => {
+        document.getElementById('score-' + t.id).textContent = t.score;
+        const orderEl = document.getElementById('order-' + t.id);
+        orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + ([3,2,1][t.order-1]||0) : '';
+        const card = document.getElementById('team-' + t.id);
+        card.classList.toggle('finished', !!t.order);
+      });
+      break;
+    case 'play_audio':
+      player.src = '/audio/' + m.key;
+      player.play().catch(() => {});
+      break;
+    case 'stop_audio':
+      player.pause();
+      player.currentTime = 0;
+      break;
+    case 'game_over':
+      const win = TEAMS.find(t => t.id === m.winner);
+      if (win) {
+        document.getElementById('team-' + win.id).classList.add('winner');
+        winnerBanner.querySelector('.t').textContent = '🏆 ' + m.winner_name + ' VÔ ĐỊCH!';
+        winnerBanner.querySelector('.t').style.color = win.color;
+        winnerBanner.querySelector('.sub').textContent = 'Cảm ơn tất cả các đội!';
+        winnerBanner.classList.add('show');
+        burstConfetti(win.color, 180);
+        playFanfare();
+        setTimeout(() => winnerBanner.classList.remove('show'), 6000);
+      }
+      break;
+    case 'reset':
+      document.querySelectorAll('.team').forEach(c => c.classList.remove('finished', 'winner'));
+      winnerBanner.classList.remove('show');
+      objectEl.classList.remove('live');
+      break;
+  }
+};
+
+function op(action, team, delta) {
+  const msg = { type: 'op', action };
+  if (team) msg.team = team;
+  if (delta !== undefined) msg.delta = delta;
+  ws.send(JSON.stringify(msg));
+}
+// Phím tắt: Enter = start, Esc = restart
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Enter') op('start');
+  if (e.key === 'Escape') op('restart');
+});
+
+// ---- Fanfare (Web Audio, 7 nốt thang) ----
+let actx = null;
+function playFanfare() {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    [523, 587, 659, 698, 784, 880, 988].forEach((f, i) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.22, now + i * 0.14);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.14 + 0.4);
+      o.connect(g).connect(actx.destination); o.start(now + i * 0.14); o.stop(now + i * 0.14 + 0.4);
+    });
+  } catch (e) {}
+}
+
+// ---- Confetti ----
+const cc = document.getElementById('confetti');
+const cctx = cc.getContext('2d');
+let pieces = [], running = false;
+function resizeCC() { cc.width = window.innerWidth; cc.height = window.innerHeight; }
+window.addEventListener('resize', resizeCC); resizeCC();
+function burstConfetti(color, n = 80) {
+  for (let i = 0; i < n; i++) {
+    pieces.push({ x: window.innerWidth/2 + (Math.random()-.5)*400, y: window.innerHeight*.25,
+      vx: (Math.random()-.5)*16, vy: -Math.random()*18-4, w: 6+Math.random()*10, h: 6+Math.random()*10,
+      color: Math.random()<.4 ? color : (Math.random()<.5 ? '#ffd700' : '#fff'), rot: Math.random()*360,
+      rotV: (Math.random()-.5)*10, life: 1, decay: 0.003+Math.random()*0.007 });
+  }
+  if (!running) { running = true; renderCC(); }
+}
+function renderCC() {
+  cctx.clearRect(0,0,cc.width,cc.height);
+  pieces = pieces.filter(p => p.life > 0);
+  for (const p of pieces) {
+    p.x += p.vx; p.vy += 0.24; p.y += p.vy; p.rot += p.rotV; p.life -= p.decay;
+    cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.rot*Math.PI/180);
+    cctx.globalAlpha = Math.max(0, p.life); cctx.fillStyle = p.color;
+    cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h); cctx.restore();
+  }
+  if (pieces.length) requestAnimationFrame(renderCC); else running = false;
+}
+</script>
+</body>
+</html>

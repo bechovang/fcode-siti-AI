@@ -23,12 +23,56 @@ Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách**
 - **Thời lượng**: ~10–11 phút
 - **Server**: FastAPI + WebSocket (`app/server.py`)
 
-### 2. Tìm Nắng Cùng AI (nhận diện hình ảnh) ⏳ Kế hoạch
+### 2. Tìm Nắng Cùng AI (nhận diện hình ảnh) ✅ Đã hoàn thiện
 
-Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng → giơ trước camera → AI nhận diện → về đích. Tính điểm 3-2-1.
+Trò đối kháng **3 đội** (A/B/C). Mỗi vòng AI gọi tên 1 vật phẩm → trẻ bốc đồ mù trong thùng → giơ trước webcam trạm đội → bấm **NHẬN DIỆN** → AI (vision) chấm đúng/sai → đội đúng trước được điểm cao hơn. **6 vòng = 6 vật phẩm** (~5 phút), điểm theo thứ tự về đích **3-2-1**.
 
-- **Công nghệ**: Object recognition + bảng điểm real-time
+- **Cách chơi**:
+  - **Master** (màn LED sân khấu + loa): bảng điểm real-time, AI Kokoro công bố vật phẩm + kết quả + tổng kết, operator controls.
+  - **3 trạm** (mỗi đội 1 laptop/tab): webcam + nút NHẬN DIỆN — trẻ **tự phục vụ hoàn toàn**, không cần người hỗ trợ.
+  - Đúng → xếp thứ tự về đích (nhất/nhì/ba) → cộng điểm, AI đọc thông báo. Sai → *"Chưa đúng rồi! Thử lại xem!"* (debounce 1.5s chống spam). Hết 60s hoặc cả 3 đội xong → kết vòng.
+- **Công nghệ**:
+  - **Vision**: OpenRouter **GPT-4o-mini** (multimodal) chấm đúng/sai theo `vision_prompt` mỗi vật — chấp nhận góc nhìn khác, một phần vật cũng OK.
+  - **TTS**: Kokoro Vietnamese (giọng `mai_linh`) — công bố vật phẩm + kết quả + tổng kết vòng + tuyên bố vô địch.
+  - **Realtime**: FastAPI + WebSocket (1 master + 3 stations), bảng điểm push tức thì.
+  - **UX sân khấu**: confetti + chime (Web Audio) khi đúng/về đích; fanfare 7 nốt + banner VÔ ĐỊCH khi kết thúc.
+  - **Operator**: ép đúng (khi AI sai/chậm), ± điểm thủ công, bỏ qua vòng, vòng kế, chạy lại.
 - **Thời lượng**: ~5 phút
+- **Server**: FastAPI + WebSocket (`app/timnang_master.py`)
+
+**Chạy Trò 2** (port 8001 — tách khỏi Trò 1 :8000):
+```bash
+python app/timnang_master.py
+```
+- **Master / scoreboard**: http://localhost:8001/
+- **Trạm đội A / B / C**: http://\<master-ip\>:8001/station/A · /B · /C
+- Cần `OPENROUTER_API_KEY` (không có → operator duyệt tay). Kokoro TTS dùng chung venv với Trò 1.
+- Test tự động: `python app/scripts/_tn_test.py` (vision + WS flow + recognize round-trip — cần server đang chạy trên :8001).
+
+#### WebSocket Trò 2 (riêng, không dùng `/ws` của Trò 1)
+
+| Endpoint | Vai trò |
+|---|---|
+| `/ws/master` | Master/scoreboard + operator |
+| `/ws/station/{team}` | Trạm đội (A/B/C) |
+
+**Server → Client:**
+```json
+{"type": "scoreboard", "phase": "playing", "round": 1, "rounds": 6, "object": "quả bóng tennis", "teams": [...]}
+{"type": "round", "object": "quả bóng tennis", "vi": "quả bóng tennis"}   // gửi trạm khi mở vòng
+{"type": "result", "correct": true|false|null, "order": 1, "points": 3, "msg": "..."}  // về trạm
+{"type": "play_audio", "key": "tts_abc123"}                               // Kokoro → loa sân khấu
+{"type": "reset"} | {"type": "game_over", "winner": "A", "winner_name": "Đội A"}
+```
+
+**Client → Server:**
+```json
+// Trạm:
+{"type": "recognize", "image": "data:image/jpeg;base64,..."}
+
+// Master/operator:
+{"type": "op", "action": "start | restart | skip_round | next_round | force_accept | add_point", "team": "A", "delta": 1}
+```
 
 ### UI/UX của Trò 1 — Các tính năng hiện tại
 
@@ -266,15 +310,19 @@ KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py     # edge-tts → .mp
 
 ```
 ├── app/                        # Ứng dụng Python chính
-│   ├── server.py               # 🎯 Server FastAPI + WebSocket + Kokoro TTS + LLM chấm/reply
-│   ├── koon_data.py            # 📦 Dữ liệu 7 câu hỏi + đáp án + gợi ý + alias + path video
+│   ├── server.py               # 🎯 Trò 1 — FastAPI + WebSocket + Kokoro TTS + LLM chấm/reply
+│   ├── koon_data.py            # 📦 Trò 1 — Dữ liệu 7 câu hỏi + đáp án + gợi ý + alias + path video
+│   ├── timnang_master.py       # 🎯 Trò 2 — FastAPI + WebSocket + Vision + Kokoro TTS + scoreboard
+│   ├── timnang_data.py         # 📦 Trò 2 — 6 vật phẩm (vision_prompt) + 3 đội + điểm 3-2-1
 │   ├── assets/                 # (gitignored phần lớn)
 │   │   ├── audio/koon/         # 🔊 Pre-cache .wav Kokoro (28 file — gen bằng gen_koon_voice.py)
 │   │   └── video/              # 🎬 Video recap (.mp4 — thả file vào là chạy; ưu tiên recap.mp4)
 │   ├── scripts/                # Scripts phụ trợ
-│   │   └── gen_koon_voice.py       # Sinh pre-cache giọng KOON (Kokoro mặc định / edge-tts backup)
+│   │   ├── gen_koon_voice.py       # Sinh pre-cache giọng KOON (Kokoro mặc định / edge-tts backup)
+│   │   └── _tn_test.py             # 🧪 Test Trò 2 (vision + WS flow + recognize round-trip)
 │   └── static/
-│       ├── index.html          # 🖥 Giao diện game + Live2D KOON + magic transition + recap controls
+│       ├── index.html          # 🖥 Trò 1 — Giao diện + Live2D KOON + magic transition + recap
+│       ├── timnang/            # 🖥 Trò 2 — master.html (scoreboard) + station.html (webcam đội)
 │       └── libs/               # 🧩 pixi v6 + Cubism core + pixi-live2d-display (vendor local)
 ├── docs/                       # Tài liệu dự án
 │   ├── source-brief.md         # Tổng hợp yêu cầu
