@@ -110,10 +110,22 @@
   #finaleText .rainbow-text { background: linear-gradient(90deg,#e74c3c,#e67e22,#f1c40f,#2ecc71,#3498db,#6366f1,#9b59b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   #finaleText .sub { display: block; font-size: .45em; font-weight: 600; -webkit-text-fill-color: #fff; margin-top: 8px; opacity: .8; }
 
-  /* ============ RECAP VIDEO + OVERLAY (placeholder) ============ */
-  #recapVideo { display: none; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 20; }
-  #recapOverlay { position: absolute; inset: 0; z-index: 20; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18); }
-  #recapOverlay.show { display: flex; }
+  /* ============ RECAP VIDEO + OVERLAY (cross-fade) ============ */
+  /* Stage elements mờ dần khi recap active */
+  #sky, #leftCol, #rightCol, #op, #answerBar, #confettiCanvas, #finaleText { transition: opacity .6s ease; }
+  #stage.video-active > #sky,
+  #stage.video-active > #leftCol,
+  #stage.video-active > #rightCol,
+  #stage.video-active > #op,
+  #stage.video-active > #answerBar,
+  #stage.video-active > #confettiCanvas,
+  #stage.video-active > #finaleText { opacity: 0; pointer-events: none; }
+
+  #recapVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 20; opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s; }
+  #stage.video-active #recapVideo { opacity: 1; visibility: visible; }
+
+  #recapOverlay { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18); opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s; }
+  #stage.video-active #recapOverlay { opacity: 1; visibility: visible; }
   #recapOverlay .reel { font-size: 64px; animation: spin 2.4s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   #recapOverlay .title { font-size: clamp(28px, 4.5vw, 52px); font-weight: 800; text-align: center;
@@ -121,6 +133,16 @@
     background-size: 200% auto; animation: shimmer 3s linear infinite; }
   @keyframes shimmer { to { background-position: 200% center; } }
   #recapOverlay .sub { font-size: 18px; opacity: .8; }
+
+  /* Recap video controls (chỉ hiện khi có video thật) */
+  #recapControls { position: absolute; bottom: 0; left: 0; right: 0; z-index: 21; display: flex; align-items: center; gap: 12px; padding: 18px 22px; background: linear-gradient(0deg, rgba(0,0,0,.75), transparent); opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s; }
+  #stage.has-video #recapControls { opacity: 1; visibility: visible; }
+  #recapControls button { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 50%; width: 46px; height: 46px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  #recapControls button:hover { background: rgba(255,255,255,.32); }
+  #rvSeek { flex: 1; height: 6px; -webkit-appearance: none; appearance: none; background: rgba(255,255,255,.25); border-radius: 4px; cursor: pointer; outline: none; }
+  #rvSeek::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; cursor: pointer; }
+  #rvSeek::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: #fff; cursor: pointer; }
+  #rvTime { font-size: 13px; color: #fff; opacity: .9; min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
 
   /* ============ DIAG ============ */
   #diag { position: absolute; left: 12px; bottom: 60px; z-index: 40; width: 350px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15);
@@ -199,6 +221,12 @@
     <div class="reel">🎬</div>
     <div class="title">Recap một năm đồng hành</div>
     <div class="sub">Đang chiếu những khoảnh khắc đẹp…</div>
+  </div>
+  <div id="recapControls">
+    <button id="rvPlay" title="Phát / Tạm dừng">⏸</button>
+    <input type="range" id="rvSeek" min="0" max="1000" value="0" step="1" title="Tua">
+    <span id="rvTime">0:00 / 0:00</span>
+    <button id="rvMute" title="Âm thanh">🔊</button>
   </div>
 
   <!-- DIAG -->
@@ -435,26 +463,46 @@ player.onended = () => { koon.classList.remove('speaking'); ws.send(JSON.stringi
 // ============================== RECAP VIDEO / OVERLAY ==============================
 const recapVideo = document.getElementById('recapVideo');
 const recapOverlay = document.getElementById('recapOverlay');
+const recapStage = document.getElementById('stage');
+const rvPlay = document.getElementById('rvPlay');
+const rvSeek = document.getElementById('rvSeek');
+const rvTime = document.getElementById('rvTime');
+const rvMute = document.getElementById('rvMute');
 let recapTimer = null;
+let rvSeeking = false;
+
+function rvFmt(t){ if(!isFinite(t)||t<0) t=0; const m=Math.floor(t/60), s=Math.floor(t%60); return m+':'+String(s).padStart(2,'0'); }
+
 function hideRecap(){
-  recapVideo.style.display = 'none';
   try { recapVideo.pause(); recapVideo.removeAttribute('src'); recapVideo.load(); } catch(e){}
-  recapOverlay.classList.remove('show');
+  recapStage.classList.remove('video-active', 'has-video');
   if(recapTimer){ clearTimeout(recapTimer); recapTimer = null; }
 }
 function showRecapVideo(url){
   hideRecap();
   recapVideo.src = url;
-  recapVideo.style.display = 'block';
+  recapStage.classList.add('video-active', 'has-video');
   recapVideo.play().catch(()=>{});
   recapVideo.onended = () => { hideRecap(); ws.send(JSON.stringify({type:'video_ended'})); };
   recapVideo.onerror = () => { hideRecap(); ws.send(JSON.stringify({type:'video_ended'})); };
 }
 function showRecapOverlay(){
   hideRecap();
-  recapOverlay.classList.add('show');
+  recapStage.classList.add('video-active');  // overlay fallback — không hiện controls
   recapTimer = setTimeout(() => { hideRecap(); ws.send(JSON.stringify({type:'overlay_ended'})); }, 15000);
 }
+
+// Recap video controls
+rvPlay.onclick = () => { if(recapVideo.paused) recapVideo.play(); else recapVideo.pause(); };
+recapVideo.onplay  = () => { rvPlay.textContent = '⏸'; };
+recapVideo.onpause = () => { rvPlay.textContent = '▶'; };
+recapVideo.ontimeupdate = () => {
+  if(!rvSeeking && recapVideo.duration){ rvSeek.value = (recapVideo.currentTime / recapVideo.duration) * 1000; }
+  rvTime.textContent = rvFmt(recapVideo.currentTime) + ' / ' + rvFmt(recapVideo.duration);
+};
+rvSeek.oninput  = () => { rvSeeking = true; if(recapVideo.duration){ recapVideo.currentTime = (rvSeek.value/1000) * recapVideo.duration; } };
+rvSeek.onchange = () => { rvSeeking = false; };
+rvMute.onclick = () => { recapVideo.muted = !recapVideo.muted; rvMute.textContent = recapVideo.muted ? '🔇' : '🔊'; };
 
 // ============================== ANSWER ==============================
 function sendAnswer(){
