@@ -144,6 +144,15 @@
   #rvSeek::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: #fff; cursor: pointer; }
   #rvTime { font-size: 13px; color: #fff; opacity: .9; min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
 
+  /* ============ MAGIC REVEAL (KOON hô biến → video) ============ */
+  #koon { transition: top .7s cubic-bezier(.34,1.56,.64,1), left .7s cubic-bezier(.34,1.56,.64,1), width .7s ease, height .7s ease; }
+  #koon.magic { position: fixed; left: 50%; top: 50%; width: min(680px, 78vh); height: min(680px, 78vh); z-index: 26; transform: translate(-50%, -50%); background: radial-gradient(circle, rgba(255,255,255,.14), transparent 65%); }
+  #magicCanvas { position: absolute; inset: 0; z-index: 25; pointer-events: none; opacity: 0; transition: opacity .4s; }
+  #magicCanvas.on { opacity: 1; }
+  #flash { position: absolute; inset: 0; z-index: 30; background: #fff; opacity: 0; pointer-events: none; }
+  #flash.on { animation: flashPulse .55s ease-out; }
+  @keyframes flashPulse { 0%{opacity:0} 35%{opacity:1} 100%{opacity:0} }
+
   /* ============ DIAG ============ */
   #diag { position: absolute; left: 12px; bottom: 60px; z-index: 40; width: 350px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.15);
     padding: 14px 16px; border-radius: 14px; font-size: 13px; display: none; backdrop-filter: blur(4px); }
@@ -211,6 +220,10 @@
 
   <!-- CONFETTI -->
   <canvas id="confettiCanvas"></canvas>
+
+  <!-- MAGIC REVEAL: particle quanh KOON + flash trắng -->
+  <canvas id="magicCanvas"></canvas>
+  <div id="flash"></div>
 
   <!-- FINALE -->
   <div id="finaleText"><span class="rainbow-text">🌈 CẦU VỒNG RỰC RỠ!</span><span class="sub">Cảm ơn các bạn nhé!</span></div>
@@ -422,14 +435,17 @@ ws.onmessage = (e) => {
       playChime('finale');
       setTimeout(() => { finaleEl.classList.remove('show'); }, 3500);
       break;
-    case 'play_video': showRecapVideo(m.url); break;
-    case 'show_recap_overlay': showRecapOverlay(); break;
+    case 'magic_reveal': koonMagicIn(); break;
+    case 'play_video': doFlash(() => { showRecapVideo(m.url); koonMagicOut(); }); break;
+    case 'show_recap_overlay': doFlash(() => { showRecapOverlay(); koonMagicOut(); }); break;
     case 'reset':
       clearRainbow();
       qEl.classList.remove('show', 'has-color');
       qEl.textContent=''; statusEl.textContent=''; finaleEl.classList.remove('show');
       sttHeardEl.classList.remove('show');
       hideRecap();
+      koonMagicOut();
+      flashEl.classList.remove('on');
       document.querySelectorAll('.orb').forEach(o => o.classList.remove('done', 'active'));
       break;
     case 'state':
@@ -477,6 +493,7 @@ function hideRecap(){
   try { recapVideo.pause(); recapVideo.removeAttribute('src'); recapVideo.load(); } catch(e){}
   recapStage.classList.remove('video-active', 'recap-video', 'recap-overlay', 'has-video');
   if(recapTimer){ clearTimeout(recapTimer); recapTimer = null; }
+  magicCanvas.classList.remove('on'); stopMagicParticles();  // safe: dừng particle nếu còn
 }
 function showRecapVideo(url){
   hideRecap();
@@ -503,6 +520,100 @@ recapVideo.ontimeupdate = () => {
 rvSeek.oninput  = () => { rvSeeking = true; if(recapVideo.duration){ recapVideo.currentTime = (rvSeek.value/1000) * recapVideo.duration; } };
 rvSeek.onchange = () => { rvSeeking = false; };
 rvMute.onclick = () => { recapVideo.muted = !recapVideo.muted; rvMute.textContent = recapVideo.muted ? '🔇' : '🔊'; };
+
+// ============================== MAGIC REVEAL (KOON hô biến → video) ==============================
+const magicCanvas = document.getElementById('magicCanvas');
+const mctx = magicCanvas.getContext('2d');
+const flashEl = document.getElementById('flash');
+let magicParticles = [], magicRunning = false;
+const MAGIC_COLORS = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#6366f1','#9b59b6','#fff','#ffd700'];
+function resizeMagic(){ magicCanvas.width = window.innerWidth; magicCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeMagic); resizeMagic();
+
+function drawStar(ctx, x, y, r, color, rot){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.fillStyle = color;
+  ctx.beginPath();
+  for(let i = 0; i < 5; i++){
+    const a = (i * 2 * Math.PI) / 5 - Math.PI / 2, a2 = a + Math.PI / 5;
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
+  }
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function startMagicParticles(){
+  magicParticles = [];
+  for(let i = 0; i < 70; i++){
+    magicParticles.push({
+      angle: Math.random() * Math.PI * 2,
+      radius: 90 + Math.random() * 240,
+      speed: (0.2 + Math.random() * 0.7) * (Math.random() < .5 ? 1 : -1),
+      size: 4 + Math.random() * 11,
+      color: MAGIC_COLORS[Math.floor(Math.random() * MAGIC_COLORS.length)],
+      type: Math.random() < 0.4 ? 'star' : 'dust',
+      twinkle: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.04 + Math.random() * 0.1,
+      yOff: Math.random() * 40, vy: -0.2 - Math.random() * 0.5,
+    });
+  }
+  if(!magicRunning){ magicRunning = true; renderMagic(); }
+}
+function stopMagicParticles(){ magicRunning = false; magicParticles = []; mctx.clearRect(0, 0, magicCanvas.width, magicCanvas.height); }
+function renderMagic(){
+  if(!magicRunning) return;
+  mctx.clearRect(0, 0, magicCanvas.width, magicCanvas.height);
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  for(const p of magicParticles){
+    p.angle += p.speed * 0.02; p.twinkle += p.twinkleSpeed; p.yOff += p.vy;
+    const x = cx + Math.cos(p.angle) * p.radius;
+    const y = cy + Math.sin(p.angle) * p.radius + p.yOff;
+    const alpha = 0.45 + 0.55 * Math.abs(Math.sin(p.twinkle));
+    mctx.globalAlpha = Math.max(0.12, alpha);
+    if(p.type === 'star') drawStar(mctx, x, y, p.size, p.color, p.twinkle);
+    else { mctx.fillStyle = p.color; mctx.beginPath(); mctx.arc(x, y, p.size * 0.4, 0, Math.PI * 2); mctx.fill(); }
+    if(p.yOff < -340) p.yOff = 40;
+  }
+  mctx.globalAlpha = 1;
+  requestAnimationFrame(renderMagic);
+}
+function playMagic(){
+  try{
+    const c = getChimeCtx(), now = c.currentTime;
+    // sparkle: 4 nốt cao bay lên
+    [784, 988, 1175, 1568].forEach((f, i) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, now + i * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.2, now + i * 0.08 + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.5);
+      o.connect(g).connect(c.destination); o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.5);
+    });
+    // swoosh: noise bandpass quét tần số lên
+    const buf = c.createBuffer(1, c.sampleRate * 0.5, c.sampleRate), d = buf.getChannelData(0);
+    for(let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const flt = c.createBiquadFilter(); flt.type = 'bandpass';
+    flt.frequency.setValueAtTime(400, now); flt.frequency.exponentialRampToValueAtTime(3200, now + 0.4); flt.Q.value = 0.7;
+    const g2 = c.createGain(); g2.gain.setValueAtTime(0.16, now); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    src.connect(flt).connect(g2).connect(c.destination); src.start(now); src.stop(now + 0.5);
+  } catch(e){ /* silent */ }
+}
+function doFlash(cb){
+  flashEl.classList.remove('on'); void flashEl.offsetWidth; flashEl.classList.add('on');
+  if(cb) setTimeout(cb, 190);  // thực thi giữa đỉnh flash (che chuyển cảnh)
+}
+function koonMagicIn(){
+  koon.classList.add('magic');
+  requestAnimationFrame(() => { if(window.koonFit) window.koonFit(); });
+  magicCanvas.classList.add('on');
+  startMagicParticles();
+  playMagic();
+}
+function koonMagicOut(){
+  koon.classList.remove('magic');
+  requestAnimationFrame(() => { if(window.koonFit) window.koonFit(); });
+  magicCanvas.classList.remove('on');
+  stopMagicParticles();
+}
 
 // ============================== ANSWER ==============================
 function sendAnswer(){
@@ -667,6 +778,7 @@ async function initLive2D(){
     };
     fit();
     window.addEventListener('resize', fit);
+    window.koonFit = fit;  // expose để gọi khi KOON đổi kích thước (magic mode)
 
     try{ model.motion('Idle'); }catch(e){}
     koon.classList.add('live2d');

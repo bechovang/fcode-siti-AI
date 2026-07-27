@@ -267,6 +267,11 @@ OUTRO_RECAP = (
     " Bây giờ chúng mình cùng xem một đoạn phim thật đặc biệt nhé!"
 )
 
+MAGIC_LINE = (
+    "Và bây giờ... cùng KOON ngắm điều kỳ diệu nhé!"
+    " Các bạn nhắm mắt lại nào... Ba, hai, một... phép màu xuất hiện!"
+)
+
 OUTRO_GOODBYE = (
     "Cảm ơn các bạn thật nhiều! Koon rất vui khi được chơi cùng các bạn."
     " Hẹn gặp lại vào những lần sau nhé! Tạm biệt!"
@@ -372,7 +377,10 @@ async def run_flow(s: Session):
         s.phase = "recap"
         await s.state()
         await s.play_or_say(K.RECAP, OUTRO_RECAP)
-        await asyncio.sleep(0.5)
+        # Magic reveal: KOON bay giữa màn + hô biến → chuyển video
+        await s.send({"type": "magic_reveal"})
+        await s.say(MAGIC_LINE)
+        await asyncio.sleep(0.3)
         # Phát video recap nếu có file mp4; không thì overlay animation fallback.
         s._video_done.clear()
         _vpath, vurl = find_recap_video()
