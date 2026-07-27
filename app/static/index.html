@@ -122,10 +122,10 @@
   #stage.video-active > #finaleText { opacity: 0; pointer-events: none; }
 
   #recapVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 20; opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s; }
-  #stage.video-active #recapVideo { opacity: 1; visibility: visible; }
+  #stage.recap-video #recapVideo { opacity: 1; visibility: visible; }
 
   #recapOverlay { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18); opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s; }
-  #stage.video-active #recapOverlay { opacity: 1; visibility: visible; }
+  #stage.recap-overlay #recapOverlay { opacity: 1; visibility: visible; }
   #recapOverlay .reel { font-size: 64px; animation: spin 2.4s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   #recapOverlay .title { font-size: clamp(28px, 4.5vw, 52px); font-weight: 800; text-align: center;
@@ -475,20 +475,20 @@ function rvFmt(t){ if(!isFinite(t)||t<0) t=0; const m=Math.floor(t/60), s=Math.f
 
 function hideRecap(){
   try { recapVideo.pause(); recapVideo.removeAttribute('src'); recapVideo.load(); } catch(e){}
-  recapStage.classList.remove('video-active', 'has-video');
+  recapStage.classList.remove('video-active', 'recap-video', 'recap-overlay', 'has-video');
   if(recapTimer){ clearTimeout(recapTimer); recapTimer = null; }
 }
 function showRecapVideo(url){
   hideRecap();
   recapVideo.src = url;
-  recapStage.classList.add('video-active', 'has-video');
+  recapStage.classList.add('video-active', 'recap-video', 'has-video');  // hiện video, ẩn overlay
   recapVideo.play().catch(()=>{});
   recapVideo.onended = () => { hideRecap(); ws.send(JSON.stringify({type:'video_ended'})); };
   recapVideo.onerror = () => { hideRecap(); ws.send(JSON.stringify({type:'video_ended'})); };
 }
 function showRecapOverlay(){
   hideRecap();
-  recapStage.classList.add('video-active');  // overlay fallback — không hiện controls
+  recapStage.classList.add('video-active', 'recap-overlay');  // hiện overlay, ẩn video
   recapTimer = setTimeout(() => { hideRecap(); ws.send(JSON.stringify({type:'overlay_ended'})); }, 15000);
 }
 
