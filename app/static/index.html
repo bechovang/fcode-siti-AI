@@ -361,6 +361,12 @@ ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   switch(m.type){
     case 'play_audio': playAudio(m.key); break;
+    case 'stop_audio':
+      // Operator skip/replay → dừng audio đang phát + lip-sync ngay
+      try { player.pause(); player.currentTime = 0; } catch(e){}
+      koon.classList.remove('speaking');
+      lipPcm = null; lipOffset = 0; lipTotal = 0;
+      break;
     case 'show_question':
       qEl.textContent = m.text;
       qEl.style.setProperty('--q-color', m.hex || 'transparent');

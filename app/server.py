@@ -191,6 +191,13 @@ class Session:
         else:
             log.warning("play_or_say: thiếu %s.wav và không có fallback", key)
 
+    def interrupt(self):
+        """Ngắt mọi điểm chờ block (audio/answer/video) để operator op
+        (skip/replay/force_correct) được xử lý ngay thay vì kẹt trong await wait()."""
+        self._audio_done.set()
+        self._answer_ready.set()
+        self._video_done.set()
+
     async def state(self):
         await self.send({
             "type": "state",
@@ -270,7 +277,14 @@ async def run_flow(s: Session):
                 await s.send({"type": "await_answer"})
                 s._answer_ready.clear()
                 s._answer = None
+                if s._op in ("force_correct", "skip"):
+                    # op đã bấm trước khi vào await → thoát wait ngay
+                    s._answer_ready.set()
                 await s._answer_ready.wait()
+
+                if s._op == "skip":
+                    s._op = None
+                    break
 
                 ans = s._answer or ""
                 if s._op == "force_correct":
@@ -361,8 +375,17 @@ async def ws_endpoint(ws: WebSocket):
                 a = msg.get("action")
                 if a == "restart":
                     await start()
-                else:  # skip | force_correct | replay
-                    s._op = a
+                elif a == "force_correct":
+                    s._op = "force_correct"
+                    s.interrupt()  # giải phóng await_answer → check force_correct
+                elif a == "skip":
+                    s._op = "skip"
+                    await s.send({"type": "stop_audio"})  # dừng audio đang phát
+                    s.interrupt()
+                elif a == "replay":
+                    s._op = "replay"
+                    await s.send({"type": "stop_audio"})
+                    s.interrupt()
     except WebSocketDisconnect:
         log.info("WS ngắt")
         if s.flow_task:
