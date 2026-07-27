@@ -64,7 +64,7 @@ def get_tts():
 # Khởi tạo TTS từ đầu để load model ngay
 _ = get_tts()
 
-# ---------- judge ----------
+# ---------- judge + reply ----------
 def judge_fuzzy(text: str, ch: dict) -> bool:
     t = (text or "").strip().lower()
     if not t:
@@ -73,32 +73,54 @@ def judge_fuzzy(text: str, ch: dict) -> bool:
     return any(fuzz.partial_ratio(t, c) >= 80 for c in cands)
 
 
-def judge_llm(text: str, ch: dict):
-    if not llm:
-        return None
-    sysp = ("Bạn là trọng tài trò chơi trẻ em tiếng Việt. Quyết định câu trả lời của bé ĐÚNG hay SAI với đáp án. "
-            "Chỉ trả lời JSON hợp lệ: {\"correct\": true} hoặc {\"correct\": false}. "
-            "Chấp nhận sai chính tả, không dấu, từ đồng nghĩa, thêm từ lễ phép (dạ, ạ).")
-    usrp = f"Đáp án đúng: '{ch['answer']}'. Câu bé nói: '{text}'."
-    try:
-        r = llm.chat.completions.create(
-            model=OR_MODEL,
-            messages=[{"role": "system", "content": sysp}, {"role": "user", "content": usrp}],
-            temperature=0,
-        )
-        data = json.loads(r.choices[0].message.content.strip())
-        return bool(data.get("correct"))
-    except Exception as e:
-        log.warning("LLM judge lỗi (%s) -> dùng fuzzy", e)
-        return None
+def _reply_template(ch: dict, attempts: int) -> str:
+    """Phản hồi fallback khi SAI (không có LLM hoặc LLM lỗi)."""
+    hint = ch["hint"]
+    if attempts <= 0:
+        return f"Chưa đúng rồi các bạn ơi! Để mình gợi ý nha: {hint}. Các bạn thử lại xem?"
+    return f"Gần được rồi! {hint}. Các bạn nghĩ thêm một chút nha, mình tin các bạn làm được!"
 
 
-def judge(text: str, ch: dict) -> bool:
+def judge_and_reply(text: str, ch: dict, attempts: int = 0):
+    """Trả (correct, reply).
+    - correct=True → reply='' (dùng pre-cache right, nhanh).
+    - correct=False → reply là câu hội thoại (LLM động, hoặc template fallback).
+    """
+    # Fuzzy TRƯỚC: tin alias cho biến thể đã biết (không dấu, sai chính tả) —
+    # chống LLM chấm sai những câu gần đúng rõ ràng (vd "qua dua ho" = dưa hấu).
+    if judge_fuzzy(text, ch):
+        return True, ""
     if llm:
-        v = judge_llm(text, ch)
-        if v is not None:
-            return v
-    return judge_fuzzy(text, ch)
+        sysp = (
+            "Bạn là KOON, nhân vật AI dẫn trò chơi đố vui cho trẻ em tiếng Việt, đang chơi cùng các bạn nhỏ. Nhiệm vụ:\n"
+            "1. Chấm xem câu bé nói có ĐÚNG với đáp án không (chấp nhận sai chính tả, không dấu, từ đồng nghĩa, "
+            "thêm từ lễ phép dạ/ạ/em).\n"
+            "2. Nếu SAI: sinh 1-2 câu đáp lại hội thoại, tự nhiên, lễ phép, khích lệ bé thử lại — dựa vào CÂU BÉ VỪA NÓI "
+            "và gợi ý. KHÔNG tiết lộ đáp án đúng. Ví dụ: \"Sao lại là [X] nhỉ? [X] không có [đặc điểm] đâu nha. "
+            "Để mình gợi ý thêm: [gợi ý nhẹ]. Thử lại xem!\". Nếu bé đã sai nhiều lần, gợi ý rõ hơn một chút.\n"
+            "3. Nếu ĐÚNG: reply để trống (\"\").\n"
+            "Luôn an toàn, vui vẻ, phù hợp trẻ em; không thô tục, không nhắc chuyện người lớn.\n"
+            'Chỉ trả JSON hợp lệ: {"correct": true|false, "reply": "..."}.'
+        )
+        usrp = (f"Đáp án đúng: \"{ch['answer']}\". Gợi ý: \"{ch['hint']}\". "
+                f"Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
+        try:
+            r = llm.chat.completions.create(
+                model=OR_MODEL,
+                messages=[{"role": "system", "content": sysp}, {"role": "user", "content": usrp}],
+                temperature=0.4,
+            )
+            data = json.loads(r.choices[0].message.content.strip())
+            correct = bool(data.get("correct"))
+            reply = (data.get("reply") or "").strip()
+            if correct:
+                return True, ""
+            return False, reply or _reply_template(ch, attempts)
+        except Exception as e:
+            log.warning("LLM judge_and_reply lỗi (%s) -> template", e)
+
+    # Fuzzy đã check ở đầu → đến đây chắc chắn SAI
+    return False, _reply_template(ch, attempts)
 
 
 # ---------- STT ----------
@@ -253,23 +275,25 @@ async def run_flow(s: Session):
                 "hex": ch["hex"],
             })
 
+            attempts = 0
+            read_q = True  # đọc câu hỏi lần đầu (và mỗi khi operator bấm replay)
             while True:  # vòng lặp thử lại khi sai
                 if s._op == "skip":
                     s._op = None
                     break
 
-                # KOON đọc câu hỏi
-                await s.play_or_say(
-                    ch["q"],
-                    f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: {ch['question_text']}",
-                )
-
-                if s._op == "replay":
-                    s._op = None
-                    continue
-                if s._op == "skip":
-                    s._op = None
-                    break
+                # KOON đọc câu hỏi (chỉ lần đầu hoặc khi replay — KHÔNG lặp lại khi sai)
+                if read_q or s._op == "replay":
+                    if s._op == "replay":
+                        s._op = None
+                    await s.play_or_say(
+                        ch["q"],
+                        f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: {ch['question_text']}",
+                    )
+                    read_q = False
+                    if s._op == "skip":
+                        s._op = None
+                        break
 
                 # Chờ trẻ trả lời
                 s.phase = "await"
@@ -290,10 +314,12 @@ async def run_flow(s: Session):
                 if s._op == "force_correct":
                     s._op = None
                     correct = True
+                    reply = ""
                 else:
-                    correct = judge(ans, ch)
+                    correct, reply = judge_and_reply(ans, ch, attempts)
+                attempts += 1
 
-                log.info("Thử thách %d: '%s' -> %s", ch["n"], ans, "ĐÚNG" if correct else "SAI")
+                log.info("Thử thách %d (lần %d): '%s' -> %s", ch["n"], attempts, ans, "ĐÚNG" if correct else "SAI")
                 s.phase = "feedback"
                 await s.state()
 
@@ -306,10 +332,8 @@ async def run_flow(s: Session):
                     await s.send({"type": "unlock_color", "hex": ch["hex"]})
                     break
                 else:
-                    await s.play_or_say(
-                        ch["wrong"],
-                        f"Chưa đúng rồi các bạn ơi! Gợi ý nhé: {ch['hint']}. Các bạn thử lại xem?",
-                    )
+                    # Phản hồi hội thoại động (LLM/Kokoro) — KHÔNG đọc lại câu hỏi
+                    await s.say(reply)
 
         # ---- RAINBOW ----
         s.phase = "rainbow"
