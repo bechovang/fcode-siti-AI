@@ -156,9 +156,22 @@ else:
 VIDEO_AVAILABLE = os.path.isdir(K.VIDEO_DIR)
 if VIDEO_AVAILABLE:
     app.mount("/video", StaticFiles(directory=K.VIDEO_DIR), name="video")
-    log.info("Video recap: /video — có file" if os.path.isfile(K.RECAP_VIDEO) else "Video recap: /video (dir) — chưa có recap.mp4 → overlay fallback")
+    _mp4s = [f for f in os.listdir(K.VIDEO_DIR) if f.lower().endswith(".mp4")] if os.path.isdir(K.VIDEO_DIR) else []
+    log.info("Video recap: /video — mp4: %s", _mp4s or "(chưa có → overlay fallback)")
 else:
     log.info("Video recap: chưa có app/assets/video → overlay fallback")
+
+
+def find_recap_video():
+    """Tìm video recap: ưu tiên recap.mp4, không thì lấy .mp4 đầu tiên (alphabet).
+    Trả (path, url) hoặc (None, None)."""
+    if os.path.isfile(K.RECAP_VIDEO):
+        return K.RECAP_VIDEO, "/video/recap.mp4"
+    if os.path.isdir(K.VIDEO_DIR):
+        for f in sorted(os.listdir(K.VIDEO_DIR)):
+            if f.lower().endswith(".mp4") and os.path.isfile(os.path.join(K.VIDEO_DIR, f)):
+                return os.path.join(K.VIDEO_DIR, f), f"/video/{f}"
+    return None, None
 
 
 # ---------- session / flow ----------
@@ -360,10 +373,12 @@ async def run_flow(s: Session):
         await s.state()
         await s.play_or_say(K.RECAP, OUTRO_RECAP)
         await asyncio.sleep(0.5)
-        # Phát video recap nếu có file; không thì overlay animation fallback.
+        # Phát video recap nếu có file mp4; không thì overlay animation fallback.
         s._video_done.clear()
-        if os.path.isfile(K.RECAP_VIDEO):
-            await s.send({"type": "play_video", "url": "/video/recap.mp4"})
+        _vpath, vurl = find_recap_video()
+        if vurl:
+            log.info("Recap video phát: %s", vurl)
+            await s.send({"type": "play_video", "url": vurl})
         else:
             await s.send({"type": "show_recap_overlay"})
         await s._video_done.wait()
