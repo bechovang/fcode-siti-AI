@@ -85,6 +85,8 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
     """Trả (correct, reply).
     - correct=True → reply='' (dùng pre-cache right, nhanh).
     - correct=False → reply là câu hội thoại (LLM động, hoặc template fallback).
+    - correct=True, reply='' → đáp án dự định (dùng pre-cache right cho nhanh).
+    - correct=True, reply≠'' → đáp án thay thế hợp lý, KOON xác nhận động.
     """
     # Fuzzy TRƯỚC: tin alias cho biến thể đã biết (không dấu, sai chính tả) —
     # chống LLM chấm sai những câu gần đúng rõ ràng (vd "qua dua ho" = dưa hấu).
@@ -93,28 +95,35 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
     if llm:
         sysp = (
             "Bạn là KOON, nhân vật AI dẫn trò chơi đố vui cho trẻ em tiếng Việt, đang chơi cùng các bạn nhỏ. Nhiệm vụ:\n"
-            "1. Chấm xem câu bé nói có ĐÚNG với đáp án không (chấp nhận sai chính tả, không dấu, từ đồng nghĩa, "
-            "thêm từ lễ phép dạ/ạ/em).\n"
-            "2. Nếu SAI: sinh 1-2 câu đáp lại hội thoại, tự nhiên, lễ phép, khích lệ bé thử lại — dựa vào CÂU BÉ VỪA NÓI "
-            "và gợi ý. KHÔNG tiết lộ đáp án đúng. Ví dụ: \"Sao lại là [X] nhỉ? [X] không có [đặc điểm] đâu nha. "
-            "Để mình gợi ý thêm: [gợi ý nhẹ]. Thử lại xem!\". Nếu bé đã sai nhiều lần, gợi ý rõ hơn một chút.\n"
-            "3. Nếu ĐÚNG: reply để trống (\"\").\n"
+            "1. Chấm xem câu bé nói có THỎA MÃN câu đố không. CÂU ĐỐ CÓ THỂ CÓ NHIỀU ĐÁP ÁN HỢP LÝ — bất kỳ đáp án nào "
+            "đúng với mô tả đều ĐÚNG, không chỉ đáp án gợi ý. Ví dụ \"cái gì có 4 chân nhưng không biết đi\" thì "
+            "\"cái bàn\", \"ghế\", \"tủ\", \"giường\" đều ĐÚNG. Đáp án sai logic (không thỏa mãn mô tả) mới là SAI. "
+            "Chấp nhận sai chính tả, không dấu, từ đồng nghĩa, từ lễ phép (dạ/ạ/em).\n"
+            "Lưu ý: đáp án gợi ý là đáp án chính/cổ điển của câu đố. Một đáp án KHÁC chỉ ĐÚNG khi nó RÕ RÀNG thỏa mãn "
+            "toàn bộ các đặc điểm trong mô tả (không chỉ cùng nhóm/tương tự). Nếu chỉ hơi giống hoặc thiếu một đặc điểm "
+            "quan trọng → SAI. Ví dụ \"chúa tể rừng xanh\" → sư tử ĐÚNG, còn hổ/beo là SAI (không phải chúa tể rừng xanh).\n"
+            "2. Nếu ĐÚNG: sinh 1-2 câu khen ngợi + XÁC NHẬN đáp án bé nói (đúng sự thật, động theo câu bé nói). "
+            "Ví dụ bé nói \"ghế\": \"Đúng rồi! Ghế cũng có bốn chân và không biết đi! Các bạn giỏi quá!\". "
+            "Không cần khớp đáp án gợi ý.\n"
+            "3. Nếu SAI: sinh 1-2 câu đáp lại hội thoại, lễ phép, khích lệ thử lại — dựa câu bé nói và gợi ý. "
+            "KHÔNG tiết lộ đáp án. TUYỆT ĐỐI KHÔNG bịa ra lý do sai sự thật để bác bỏ (ví dụ không được nói "
+            "\"ghế không có chân\" khi ghế có chân). Nếu không chắc bé nói đúng hay sai, hãy cho là SAI rồi gợi ý thêm.\n"
             "Luôn an toàn, vui vẻ, phù hợp trẻ em; không thô tục, không nhắc chuyện người lớn.\n"
             'Chỉ trả JSON hợp lệ: {"correct": true|false, "reply": "..."}.'
         )
-        usrp = (f"Đáp án đúng: \"{ch['answer']}\". Gợi ý: \"{ch['hint']}\". "
-                f"Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
+        usrp = (f"Câu đố: \"{ch['question_text']}\". Đáp án gợi ý (chỉ tham khảo): \"{ch['answer']}\". "
+                f"Gợi ý: \"{ch['hint']}\". Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
         try:
             r = llm.chat.completions.create(
                 model=OR_MODEL,
                 messages=[{"role": "system", "content": sysp}, {"role": "user", "content": usrp}],
-                temperature=0.4,
+                temperature=0.3,
             )
             data = json.loads(r.choices[0].message.content.strip())
             correct = bool(data.get("correct"))
             reply = (data.get("reply") or "").strip()
             if correct:
-                return True, ""
+                return True, reply or "Đúng rồi! Các bạn giỏi quá!"
             return False, reply or _reply_template(ch, attempts)
         except Exception as e:
             log.warning("LLM judge_and_reply lỗi (%s) -> template", e)
@@ -324,10 +333,15 @@ async def run_flow(s: Session):
                 await s.state()
 
                 if correct:
-                    await s.play_or_say(
-                        ch["right"],
-                        f"Chính xác! Đáp án là {ch['answer']}. Các bạn giỏi quá! Mảnh màu {ch['color'].lower()} đã được tìm thấy!",
-                    )
+                    if reply:
+                        # Đáp án thay thế hợp lý → LLM reply động xác nhận (đúng sự thật)
+                        await s.say(reply)
+                    else:
+                        # Đáp án dự định → pre-cache right (nhanh)
+                        await s.play_or_say(
+                            ch["right"],
+                            f"Chính xác! Đáp án là {ch['answer']}. Các bạn giỏi quá! Mảnh màu {ch['color'].lower()} đã được tìm thấy!",
+                        )
                     s.unlocked.append(ch["hex"])
                     await s.send({"type": "unlock_color", "hex": ch["hex"]})
                     break
