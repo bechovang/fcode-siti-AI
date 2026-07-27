@@ -3,13 +3,13 @@
 > Nguồn: `thongtin/CÙNG KOO ĐI TÌM CẦU VỒNG.docx` (đã chuyển sang markdown).
 > Nhân vật AI tên **KOON**. Trò 1 (Cầu Vồng). Tổng thời lượng ~10–11 phút.
 > Cập nhật 2026-07-25: Đã chuyển sang TTS động với **Kokoro Vietnamese** (giọng `mai_linh`).
-> Cập nhật 2026-07-28: Pre-cache Kokoro (độ trễ 0) + LLM chấm theo **logic câu đố** & sinh **phản hồi hội thoại** + recap video với transition **"phép màu"** + operator controls ngắt block. Xem README.md để setup đầy đủ.
+> Cập nhật 2026-07-28: Hoàn thiện Trò 1 + Trò 2. Xem README.md để setup đầy đủ.
 
 ## Cấu trúc 4 phần
-1. **Chào hỏi & khởi động** (~1,5–2 phút) — TTS động
-2. **7 thử thách sắc màu** (~6–7 phút) — TTS động từng câu
-3. **Chuyển video recap** (~2 phút)
-4. **Chào tạm biệt** (~30–40 giây) — TTS động
+1. **Chào hỏi & khởi động** (~1,5–2 phút) — Pre-cache TTS (intro 5 câu)
+2. **7 thử thách sắc màu** (~6–7 phút) — Pre-cache TTS (câu hỏi + phản hồi đúng), Kokoro động (phản hồi sai)
+3. **Chuyển video recap** (~2 phút) — Pre-cache TTS
+4. **Chào tạm biệt** (~30–40 giây) — Pre-cache TTS
 
 ## 7 câu hỏi + đáp án + gợi ý (đã định nghĩa trong `koon_data.py`)
 
@@ -68,3 +68,12 @@
 
 **Outro** (sau video):
 - Pre-cache `99_goodbye`: *"Hóa ra điều kỳ diệu mà mình luôn tìm kiếm chính là những nụ cười, những bài học và những kỷ niệm đẹp... KOON chúc các bạn sẽ luôn chăm ngoan, học thật giỏi... Hẹn gặp lại các bạn trong những chuyến phiêu lưu tiếp theo nhé. Tạm biệt các bạn nhỏ!"*
+
+---
+
+### Trò 2 — Tìm Nắng Cùng AI
+
+> Kịch bản riêng: [`docs/kich-ban-timnang.md`](kich-ban-timnang.md)
+> Code: `app/timnang_master.py` + `app/timnang_data.py` + `app/static/timnang/`
+
+Trò đối kháng 3 đội với AI vision. 6 vòng, 6 vật phẩm, tính điểm 3-2-1. WebSocket master + 3 stations.

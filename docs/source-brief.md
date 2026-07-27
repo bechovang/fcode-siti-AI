@@ -38,11 +38,23 @@ Chuỗi AI hội thoại thời gian thực:
 | Thành phần | Giải pháp | Chi tiết |
 |---|---|---|
 | **TTS** | ✅ **Kokoro Vietnamese** (ONNX CPU) | 14 giọng VN, chạy CPU 5x realtime. Giọng mặc định: `mai_linh` |
-| **LLM Judge** | ✅ **OpenRouter GPT-4o-mini** | Chấm đáp án, fallback fuzzy match nếu mất kết nối |
-| **ASR** | ✅ **PhoWhisper** (CPU int8) | faster-whisper, fine-tune tiếng Việt, VAD filter |
-| **Server** | ✅ **FastAPI + WebSocket** | Chạy kịch bản 7 thử thách, TTS động, operator controls |
-| **Frontend** | ✅ **HTML/JS WebSocket client** | Hiệu ứng cầu vồng, câu hỏi, nút mic/text |
+| **LLM Judge** | ✅ **OpenRouter GPT-4o-mini** | Chấm đáp án theo logic câu đố, fallback fuzzy match nếu mất kết nối |
+| **ASR** | ✅ **Web Speech API** (browser native) | Chrome=Google, Edge=Azure — dùng cho Trò 1 (trẻ nói đáp án) |
+| **Server** | ✅ **FastAPI + WebSocket** | `app/server.py` :8000 — 7 thử thách, pre-cache TTS + Kokoro động, operator controls |
+| **Frontend** | ✅ **HTML/JS WebSocket client** | Live2D KOON, hiệu ứng cầu vồng, câu hỏi, recap video + magic transition |
+| **Avatar** | ✅ **Live2D `mao_pro`** | pixi-live2d-display + lip-sync RMS theo TTS |
 | **Pipecat** | ⏸️ **Future consideration** | Framework real-time voice pipeline — đánh giá cho phase 2 |
+
+### Trạng thái triển khai (Trò 2)
+
+| Thành phần | Giải pháp | Chi tiết |
+|---|---|---|
+| **Server** | ✅ **FastAPI + WebSocket** | `app/timnang_master.py` :8001 — master + 3 stations, operator controls |
+| **Vision AI** | ✅ **OpenRouter GPT-4o-mini** (multimodal) | Chấm đúng/sai theo `vision_prompt` từng vật phẩm, chấp nhận góc nhìn thay đổi |
+| **TTS** | ✅ **Kokoro Vietnamese** (ONNX CPU) | Pre-cache 16 file (intro + 6 vòng + 9 thông báo), fallback synthesize động |
+| **Scoreboard** | ✅ **Real-time WebSocket** | Push điểm mỗi khi có thay đổi, confetti + chime, fanfare vô địch |
+| **Frontend** | ✅ **HTML/JS WebSocket client** | `station.html` (webcam + nút NHẬN DIỆN), `master.html` (scoreboard + operator) |
+| **Test** | ✅ **`_tn_test.py`** | Vision + WS flow + recognize round-trip |
 
 ---
 
@@ -76,31 +88,38 @@ Trẻ đồng hành cùng **nhân vật AI** vượt qua **7 thử thách** đ�
 
 ---
 
-## 3. Trò 2 — "Tìm Nắng Cùng AI" (nhận diện hình ảnh)
+## 3. Trò 2 — "Tìm Nắng Cùng AI" (nhận diện hình ảnh) ✅ Đã hoàn thiện
 
-> Nguồn: `thongtin/[SITI]_TLHD - LHTTSUM26 - I CÙNG .docx`.
+> Nguồn: `thongtin/[SITI]_TLHD - LHTTSUM26 - I CÙNG .docx`. Triển khai: `app/timnang_master.py` + `app/timnang_data.py` + `app/static/timnang/*.html`.
 
 ### Ý tưởng
-Trò đối kháng đồng đội. Mỗi lượt: trẻ **bốc đồ mù** trong "thùng vật phẩm bí mật" → chạy lên **giơ đồ trước camera** → **AI nhận diện hình ảnh** → đúng thì về đích, đập tay chuyển lượt. Tính điểm theo tốc độ nhận diện đúng.
+Trò đối kháng **3 đội** (A/B/C). Mỗi vòng AI gọi tên 1 vật phẩm → trẻ bốc đồ mù trong thùng → giơ trước webcam trạm đội → bấm **NHẬN DIỆN** → AI (vision) chấm đúng/sai → đội đúng trước được điểm cao hơn. **6 vòng = 6 vật phẩm** (~5 phút), điểm theo thứ tự về đích **3-2-1**.
 
 ### Thông số
-- Hình thức: **3–4 đội** đối kháng, mỗi đội xếp hàng dọc trước thùng của mình. *(⚠️ Gốc ghi "4 đội/4 thùng" nhưng luật/kịch bản chỉ có **3 đội A,B,C** + 3 TNV giám sát → cần chốt 3 hay 4.)*
-- Thời lượng: **5 phút**.
-- Cách chơi 1 lượt: gọi tên vật phẩm → bốc mù trong thùng → chạy giơ trước webcam → AI nhận diện đúng → chạy về đích → đập tay → lượt kế.
-- Tính điểm **3-2-1**: đội nhận diện đúng về nhất +3, nhì +2, chót +1.
-- Hết 5 phút: tổng điểm, cao nhất thắng.
+- Hình thức: **3 đội** đối kháng, mỗi đội 1 trạm laptop + webcam. Trẻ **tự phục vụ hoàn toàn**, không TNV/MC.
+- Thời lượng: **~5 phút** (6 vòng × 40s + intro + tổng kết).
+- Cách chơi 1 vòng: AI TTS công bố vật phẩm → 3 đội đồng thời bốc mù trong thùng → giơ trước webcam → bấm NHẬN DIỆN → AI vision chấm → đúng → xếp hạng nhất/nhì/ba → cộng điểm.
+- Tính điểm **3-2-1**: đội đúng về nhất +3, nhì +2, ba +1.
+- Hết 60s hoặc cả 3 đội xong → kết vòng. 6 vòng → tổng kết đội vô địch.
 
-### Yêu cầu kỹ thuật (sau ràng buộc mới)
-- **AI nhận diện hình ảnh** (object recognition) cho từng laptop/đội.
-- **AI tự host** (không TNV gọi vật phẩm): AI tự thông báo vật phẩm cần tìm, tự nhận diện, tự công bố kết quả **lễ phép, đúng ngữ cảnh**.
-- **Bảng điểm thời gian thực** (3-2-1) hiển thị trên màn hình.
-- Xử lý khi AI đoán sai / chậm (cần cơ chế rõ).
+### Giải pháp kỹ thuật
+- **Vision**: OpenRouter **GPT-4o-mini** (multimodal) — chấm đúng/sai theo `vision_prompt` mỗi vật. Chấp nhận góc nhìn khác, một phần vật cũng OK.
+- **TTS**: Kokoro Vietnamese (giọng `mai_linh`) — **pre-cache** 16 file (intro + 6 vòng + 9 thông báo đúng) + fallback synthesize động.
+- **Realtime**: FastAPI + WebSocket (1 master + 3 stations), bảng điểm push tức thì.
+- **UX sân khấu**: confetti + chime khi đúng/về đích; fanfare 7 nốt + banner VÔ ĐỊCH khi kết thúc.
+- **Server**: Port **8001** (tách biệt Trò 1 :8000).
+- **Operator**: ép đúng, ± điểm thủ công, bỏ qua vòng, vòng kế, chạy lại.
 
-### Dụng cụ (gốc)
-- Thùng vật phẩm bí mật: 03–04 thùng (mỗi đội 1, che kín, khoét lỗ vừa tay).
-- Bộ vật phẩm mô hình: 3–4 bộ giống nhau — **bóng tennis, nước Lavie, Coca-Cola, muỗng ngắn, túi Tote, tô nhựa**.
-- Laptop: 03–04 cái, mỗi máy 1 module nhận diện + webcam.
-- Sheet tính điểm: 01 bảng.
+### Xử lý khi AI sai/chậm
+- Sai → *"Chưa đúng rồi! Thử lại xem!"* (debounce 1.5s chống spam bấm).
+- Không có `OPENROUTER_API_KEY` → operator duyệt tay (nút force_accept).
+- Mất kết nối → trạm tự dừng, master thông báo.
+
+### Dụng cụ (thực tế)
+- 3 thùng vật phẩm bí mật (che kín, khoét lỗ vừa tay) — mỗi đội 1 thùng.
+- 6 vật phẩm mô hình (3 bộ giống nhau): **bóng tennis, nước Lavie, Coca-Cola, muỗng, túi Tote, tô nhựa**.
+- 3 laptop/webcam (trạm đội) + 1 màn LED sân khấu (master/scoreboard).
+- Server laptop chạy `timnang_master.py`. Điện thoại/tablet có thể dùng làm trạm (PWA webc
 
 ---
 
@@ -108,12 +127,12 @@ Trò đối kháng đồng đội. Mỗi lượt: trẻ **bốc đồ mù** tron
 
 1. **Số đội** trò Tìm Nắng: 3 hay 4? (gốc mâu thuẫn).
 2. **Spec AI nhận diện**: ngưỡng độ chính xác, độ trễ tối đa, chạy online hay offline (sự kiện wifi yếu), xử lý khi đoán sai.
-3. **Spec ASR cho trẻ em tiếng Việt**: độ chính xác mục tiêu, từ vựng giới hạn, nhiễu sân khấu.
+3. **ASR cho Trò 1**: ✅ Web Speech API (browser native) — Chrome=Google, Edge=Azure. Không cần PhoWhisper offline. Độ chính xác đủ cho 7 đáp án có gợi ý.
 4. **LLM/TTS**: ✅ **Đã chọn** Kokoro Vietnamese (TTS, 14 giọng) + OpenRouter GPT-4o-mini (LLM judge). Ràng buộc an toàn nội dung cho trẻ qua system prompt.
-5. **Nội dung**: ✅ **Đã có** 7 câu hỏi + gợi ý (`koon_data.py`). Danh sách vật phẩm Tìm Nắng + sheet điểm chưa có.
+5. **Nội dung**: ✅ **Đã có** 7 câu hỏi + gợi ý (`koon_data.py`). ✅ 6 vật phẩm Tìm Nắng + hệ thống điểm 3-2-1 (`timnang_data.py`).
 6. **Luồng tự vận hành**: trẻ biết làm gì tiếp theo qua tín hiệu gì (màn hình/đèn/giọng)? có cần onboarding ngắn?
 7. **Deadline & ràng buộc sự kiện**: ngày Gala, thời gian dựng/thử nghiệm, ngân sách, thiết bị có sẵn.
-8. **Số trạm/lượt chơi song song**: chạy 1 lần hay nhiều lần trong Gala?
+8. **Số trạm/lượt chơi song song**: Trò 2 chạy 1 lần trong Gala (6 vòng × 3 đội song song). Trò 1 chạy 1 lần (7 thử thách tập thể).
 
 ---
 
@@ -128,7 +147,8 @@ Trò đối kháng đồng đội. Mỗi lượt: trẻ **bốc đồ mù** tron
 ## 6. Trạng thái BMad & Tiến độ
 
 - Dự án ở **Stage 0** (chưa có Project Brief/PRD/Architecture chính thức).
-- Đã implement: server Trò 1 với Kokoro TTS động, LLM judge, ASR PhoWhisper.
-- **Kế hoạch tiếp theo**: Chạy thử nghiệm với trẻ em, tinh chỉnh prompt KOON, phát triển Trò 2 (Tìm Nắng).
+- **Trò 1** (Cầu Vồng): ✅ Hoàn thiện — 7 thử thách, pre-cache TTS + Kokoro động, Live2D KOON + lip-sync, recap video + magic transition, operator controls.
+- **Trò 2** (Tìm Nắng): ✅ Hoàn thiện — 3 đội đối kháng, vision GPT-4o-mini, WebSocket master + 3 stations, pre-cache TTS, scoreboard confetti/fanfare.
+- **Kế hoạch tiếp theo**: Chạy thử nghiệm với trẻ em, tinh chỉnh prompt KOON, pre-cache edge-tts backup cho Trò 2.
 - **Future**: Pipecat framework cho real-time voice pipeline phase 2.
 - Cấu hình BMad: `document_output_language = Vietnamese` (đã đặt).
