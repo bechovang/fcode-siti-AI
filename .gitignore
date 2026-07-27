@@ -27,6 +27,9 @@ nul
 # Audio assets (generated)
 app/assets/audio/
 
+# Video assets (recap — thả runtime: recap.mp4 hoặc bất kỳ .mp4 nào)
+app/assets/video/
+
 # BMad output artifacts
 _bmad-output/
 

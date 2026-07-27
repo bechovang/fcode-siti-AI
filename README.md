@@ -8,12 +8,18 @@ Dự án xây dựng phần mềm AI cho phần giao lưu/giải trí trên sân
 
 ## Trò chơi
 
-### 1. Cùng Koon Đi Tìm Cầu Vồng (AI hội thoại) ✅ Đang triển khai
+### 1. Cùng Koon Đi Tìm Cầu Vồng (AI hội thoại) ✅ Đã hoàn thiện
 
 Trẻ đồng hành cùng nhân vật AI **KOON** vượt qua **7 thử thách** để tìm lại 7 sắc màu cầu vồng.
 
-- **Cách chơi**: KOON đọc câu đố → trẻ trả lời (micro hoặc gõ chữ) → LLM chấm đúng/sai → đúng: mở khóa mảnh màu, sai: KOON gợi ý → thử lại
-- **Công nghệ**: Kokoro Vietnamese TTS (ONNX CPU) → OpenRouter LLM (GPT-4o-mini) → STT Web Speech API (Chrome=Google / Edge=Azure) → Live2D avatar (mao_pro, lip-sync theo giọng TTS)
+- **Cách chơi**: KOON đọc câu đố → trẻ trả lời (mic hoặc gõ chữ) → LLM chấm đúng/sai **theo logic câu đố** (chấp nhận nhiều đáp án hợp lý, vd "4 chân không đi" → bàn/ghế/tủ đều đúng) → đúng: mở khóa mảnh màu; sai: KOON **đáp lại hội thoại** + gợi ý, trẻ thử lại (KHÔNG lặp lại câu hỏi → mượt).
+- **Công nghệ**:
+  - **TTS**: Kokoro Vietnamese (ONNX CPU, giọng `mai_linh`) — **pre-cache** toàn bộ câu cố định (phát tức thì <200ms) + Kokoro động cho câu phản hồi (chịu lỗi: thiếu file → tự sinh).
+  - **LLM**: OpenRouter GPT-4o-mini — 1 call chấm đúng/sai **+ sinh phản hồi hội thoại** (lễ phép, gợi ý nhẹ, không tiết lộ đáp án, không bịa lý do sai sự thật, an toàn trẻ em).
+  - **STT**: Web Speech API (Chrome=Google / Edge=Azure).
+  - **Avatar**: Live2D `mao_pro` + lip-sync theo giọng TTS.
+  - **Recap**: sau cầu vồng → KOON "hô biến" (bay ra giữa màn + particle sao/bụi cầu vồng + sound magic) → phát video recap với controls (pause/tua/âm lượng).
+  - **Operator**: skip / force_correct / replay / restart — ngắt được mọi điểm chờ (cả lúc KOON đang nói và lúc chờ trẻ trả lời).
 - **Thời lượng**: ~10–11 phút
 - **Server**: FastAPI + WebSocket (`app/server.py`)
 
@@ -49,7 +55,8 @@ Trò đối kháng đồng đội. Trẻ bốc đồ mù trong thùng → giơ t
 - **Finale**: Confetti lớn + "CẦU VỒNG RỰC RỠ!" gradient + 7-nốt nhạc thang âm
 - **Sao nền**: 30 ngôi sao twinkle nhẹ ở 60% trên màn hình
 - **KOON vui khi đúng**: Expression exp_05 + random motion (special_01-03), tự động về Idle sau 3s
-- **Operator**: KOON nghe được (hiện text dưới status, tự ẩn sau 4s) + phím tắt R/S/F/Esc
+- **Recap video + "phép màu"**: Hết cầu vồng → KOON bay ra giữa màn + phóng to + particle sao/bụi cầu vồng xoay lấp lánh + sound magic (sparkle+swoosh) → KOON hô biến → flash trắng → video phát toàn màn (controls pause/tua/âm lượng, cross-fade mượt). Chưa có video → overlay animation "Recap một năm đồng hành".
+- **Operator panel**: Đọc lại (R) / Bỏ qua (S) / Ép đúng (F) / Chạy lại (Esc) — **ngắt được mọi điểm chờ** (ngay cả lúc KOON đang nói hoặc đang chờ trẻ). KOON nghe được (hiện text dưới status, tự ẩn sau 4s).
 
 ---
 
@@ -110,7 +117,18 @@ pip install -e "ref/Kokoro-Vietnamese[onnx]"
 pip install fastapi uvicorn openai rapidfuzz soundfile
 ```
 
-### Bước 6: Thiết lập API keys
+### Bước 6: Sinh pre-cache giọng KOON (khuyến nghị)
+
+Toàn bộ câu thoại cố định (intro, 7 câu hỏi, phản hồi đúng/sai, recap, goodbye) được **pre-cache** bằng giọng Kokoro để phát tức thì (không đợi synthesize runtime). File bị gitignore nên máy mới cần gen:
+
+```bash
+python app/scripts/gen_koon_voice.py
+# Đổi engine (tùy chọn):  KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py   → .mp3 edge-tts backup
+```
+
+Output: `app/assets/audio/koon/*.wav` (28 file, giọng `mai_linh`). Nếu bỏ qua, server vẫn chạy nhưng phát Kokoro động mỗi câu (chậm hơn ~1-2s).
+
+### Bước 7: Thiết lập API keys
 
 **Cần thiết** (nếu không có, LLM judge sẽ fallback về fuzzy match kém chính xác hơn):
 
@@ -124,7 +142,7 @@ export OPENROUTER_API_KEY=sk-or-v1-...   # Linux/macOS
 
 👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/)
 
-### Bước 7: Chạy server
+### Bước 8: Chạy server
 
 ```bash
 python app/server.py
@@ -140,7 +158,7 @@ INFO STT: browser Web Speech API (Chrome=Google / Edge=Azure)
 INFO Uvicorn running on http://0.0.0.0:8000
 ```
 
-### Bước 8: Mở trình duyệt (Chrome hoặc Edge)
+### Bước 9: Mở trình duyệt (Chrome hoặc Edge)
 
 Vào **http://localhost:8000** bằng **Chrome/Edge** (cần Web Speech API cho mic).
 
@@ -186,12 +204,20 @@ set OR_MODEL=anthropic/claude-sonnet-4
 set OR_MODEL=google/gemini-2.0-flash-001
 ```
 
+### Sinh lại pre-cache giọng
+
+```bash
+python app/scripts/gen_koon_voice.py                          # Kokoro (mặc định) → .wav
+KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py     # edge-tts → .mp3 (backup)
+```
+
 ### Toàn bộ biến môi trường
 
 | Biến | Mặc định | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS (14 giọng VN) |
-| `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM judge |
+| `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS Kokoro (14 giọng VN) |
+| `KOON_GEN_ENGINE` | `kokoro` | ❌ | Engine gen pre-cache: `kokoro` (.wav) hoặc `edge` (.mp3) |
+| `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM chấm + sinh phản hồi |
 | `OR_MODEL` | `openai/gpt-4o-mini` | ❌ | Model LLM trên OpenRouter |
 
 ---
@@ -202,19 +228,24 @@ set OR_MODEL=google/gemini-2.0-flash-001
 |---|---|---|
 | `/` | GET | Trang chủ (giao diện game) |
 | `/ws` | WebSocket | Kết nối game real-time |
-| `/audio/{key}` | GET | Lấy file audio (WAV từ TTS hoặc MP3 cached) |
-| `/health` | GET | Kiểm tra trạng thái server (TTS/LLM/STT) |
+| `/audio/{key}` | GET | Lấy file audio (WAV Kokoro động, hoặc WAV pre-cache, hoặc MP3 edge backup) |
+| `/video/{file}` | GET | Phục vụ video recap từ `app/assets/video/` |
+| `/health` | GET | Kiểm tra trạng thái server (TTS/LLM/STT/Live2D/video) |
 
 ### WebSocket Messages
 
 **Server → Client:**
 ```json
-{"type": "play_audio", "key": "tts_abc123", "tts": true}
+{"type": "play_audio", "key": "tts_abc123", "tts": true}   // tts=true: Kokoro động; tts=false: pre-cache
 {"type": "state", "phase": "ask", "idx": 0, "unlocked": [], "total": 7}
 {"type": "show_question", "text": "...", "color": "Đỏ", "hex": "#e74c3c"}
 {"type": "await_answer"}
 {"type": "unlock_color", "hex": "#e74c3c"}
 {"type": "rainbow"}
+{"type": "magic_reveal"}                       // KOON bay giữa + particle + sound (hô biến)
+{"type": "play_video", "url": "/video/recap.mp4"}   // có file mp4 → phát video
+{"type": "show_recap_overlay"}                 // không có video → overlay animation fallback
+{"type": "stop_audio"}                         // operator skip/replay → dừng audio+lip-sync
 {"type": "ready"}
 {"type": "reset"}
 ```
@@ -224,7 +255,9 @@ set OR_MODEL=google/gemini-2.0-flash-001
 {"type": "start"}
 {"type": "audio_ended"}
 {"type": "answer", "text": "dưa hấu", "stt": "web-speech"}   // "stt": "web-speech" (mic) hoặc bỏ trống (gõ tay)
-{"type": "op", "action": "skip"}
+{"type": "video_ended"}                        // hết video recap
+{"type": "overlay_ended"}                      // hết overlay fallback
+{"type": "op", "action": "skip"}               // skip | force_correct | replay | restart
 ```
 
 ---
@@ -233,13 +266,15 @@ set OR_MODEL=google/gemini-2.0-flash-001
 
 ```
 ├── app/                        # Ứng dụng Python chính
-│   ├── server.py               # 🎯 Server FastAPI + WebSocket + Kokoro TTS
-│   ├── koon_data.py            # 📦 Dữ liệu 7 câu hỏi + đáp án + gợi ý
+│   ├── server.py               # 🎯 Server FastAPI + WebSocket + Kokoro TTS + LLM chấm/reply
+│   ├── koon_data.py            # 📦 Dữ liệu 7 câu hỏi + đáp án + gợi ý + alias + path video
+│   ├── assets/                 # (gitignored phần lớn)
+│   │   ├── audio/koon/         # 🔊 Pre-cache .wav Kokoro (28 file — gen bằng gen_koon_voice.py)
+│   │   └── video/              # 🎬 Video recap (.mp4 — thả file vào là chạy; ưu tiên recap.mp4)
 │   ├── scripts/                # Scripts phụ trợ
-│   │   ├── gen_koon_voice.py       # Tạo voice mẫu (legacy)
-│   │   └── gen_koon_voice_capcut.py
+│   │   └── gen_koon_voice.py       # Sinh pre-cache giọng KOON (Kokoro mặc định / edge-tts backup)
 │   └── static/
-│       ├── index.html          # 🖥 Giao diện game + Live2D KOON (lip-sync theo giọng TTS)
+│       ├── index.html          # 🖥 Giao diện game + Live2D KOON + magic transition + recap controls
 │       └── libs/               # 🧩 pixi v6 + Cubism core + pixi-live2d-display (vendor local)
 ├── docs/                       # Tài liệu dự án
 │   ├── source-brief.md         # Tổng hợp yêu cầu
@@ -267,12 +302,27 @@ set OR_MODEL=google/gemini-2.0-flash-001
 │                          │◄──────►│                              │
 │ 🎤 Mic → Web Speech API  │ text   │  Session Flow (7 thử thách)   │
 │   nhận diện tiếng Việt   │───────►│      │                       │
-│                          │        │      ├─► LLM Judge (Đ/S)      │
-│ 🔊 <audio> phát TTS      │        │      │   (OpenRouter / Fuzzy) │
-│   từ /audio/{key}        │◄───────│      └─► Kokoro TTS → WAV     │
+│                          │        │      ├─► Pre-cache .wav (tức thì)│
+│ 🔊 <audio> phát TTS      │        │      ├─► LLM chấm + reply      │
+│   từ /audio/{key}        │◄───────│      │   (logic câu đố + hội thoại)│
+│ 🎬 <video> recap + magic │        │      └─► Kokoro TTS → WAV (động)│
 └──────────────────────────┘ audio  │           (ONNX CPU)          │
                                     └──────────────────────────────┘
 ```
+
+### Luồng chấm đáp án (`judge_and_reply`)
+
+1. **Fuzzy match** trước (alias trong `koon_data.py`) → đúng đáp án dự định → dùng **pre-cache right** (nhanh).
+2. Nếu không khớp → **LLM** chấm theo **logic câu đố** (accept bất kỳ đáp án hợp lý, vd "ghế" cho "4 chân không đi") + sinh **reply hội thoại**:
+   - **Đúng** (đáp án thay thế) → KOON nói reply động xác nhận (vd *"Đúng rồi! Ghế cũng có bốn chân..."*).
+   - **Sai** → KOON đáp lại + gợi ý nhẹ, không tiết lộ đáp án, không bịa lý do sai sự thật.
+3. **Fallback** (không LLM / lỗi) → fuzzy + template reply.
+
+Câu hỏi chỉ đọc **1 lần** (replay = R để đọc lại); khi sai KOON chỉ phản hồi, không lặp câu hỏi.
+
+### Recap video
+
+Thả bất kỳ `.mp4` nào vào `app/assets/video/` (ưu tiên `recap.mp4`, không thì lấy file đầu theo alphabet) → server tự nhận, KOON "hô biến" rồi phát. Chưa có file → overlay animation "Recap một năm đồng hành".
 
 ### TTS Performance
 

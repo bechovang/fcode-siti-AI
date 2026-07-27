@@ -3,6 +3,7 @@
 > Nguồn: `thongtin/CÙNG KOO ĐI TÌM CẦU VỒNG.docx` (đã chuyển sang markdown).
 > Nhân vật AI tên **KOON**. Trò 1 (Cầu Vồng). Tổng thời lượng ~10–11 phút.
 > Cập nhật 2026-07-25: Đã chuyển sang TTS động với **Kokoro Vietnamese** (giọng `mai_linh`).
+> Cập nhật 2026-07-28: Pre-cache Kokoro (độ trễ 0) + LLM chấm theo **logic câu đố** & sinh **phản hồi hội thoại** + recap video với transition **"phép màu"** + operator controls ngắt block. Xem README.md để setup đầy đủ.
 
 ## Cấu trúc 4 phần
 1. **Chào hỏi & khởi động** (~1,5–2 phút) — TTS động
@@ -33,25 +34,37 @@
 
 | Thành phần | Chi tiết |
 |---|---|
-| **TTS** | Kokoro Vietnamese (ONNX CPU, 14 giọng). Giọng mặc định: `mai_linh` |
-| **LLM Judge** | OpenRouter GPT-4o-mini (hoặc fuzzy match nếu offline) |
-| **ASR** | faster-whisper PhoWhisper (CPU int8, VAD filter) |
+| **TTS** | Kokoro Vietnamese (ONNX CPU, giọng `mai_linh`). **Pre-cache** toàn bộ câu cố định (intro, câu hỏi, phản hồi đúng, recap, goodbye) → phát tức thì (<200ms); Kokoro động cho câu phản hồi khi sai. Gen: `python app/scripts/gen_koon_voice.py` |
+| **LLM** | OpenRouter GPT-4o-mini — 1 call **chấm đúng/sai theo logic câu đố** (chấp nhận nhiều đáp án hợp lý, vd "4 chân không đi" → bàn/ghế/tủ đều đúng) **+ sinh phản hồi hội thoại** khi sai (lễ phép, gợi ý nhẹ, không tiết lộ đáp án, không bịa lý do sai sự thật, an toàn trẻ em). Fallback fuzzy + template khi offline. |
+| **ASR** | Web Speech API trong browser (Chrome=Google / Edge=Azure) |
+| **Avatar** | Live2D `mao_pro` + lip-sync theo giọng TTS (decode audio → RMS → ParamA) |
+| **Recap** | Video `.mp4` bất kỳ trong `app/assets/video/` (ưu tiên `recap.mp4`) + transition "phép màu": KOON bay ra giữa màn + particle sao/bụi cầu vồng + sound magic → flash → video (controls pause/tua/âm lượng). Chưa có video → overlay animation. |
+| **Operator** | skip / force_correct / replay / restart — **ngắt được mọi điểm chờ** (ngay cả lúc KOON đang nói hoặc đang chờ trẻ trả lời) |
 | **Server** | FastAPI + WebSocket (`app/server.py`) |
 
-### Lời thoại KOON (định nghĩa trong `server.py`)
+### Lời thoại KOON
 
-**Intro:**
-- "Xin chào tất cả các bạn nhỏ! Tôi là Koon đây!"
-- "Các bạn có biết không, trên bầu trời có một cầu vồng tuyệt đẹp với bảy sắc màu."
-- "Nhưng mà ông trời đã lấy mất bảy màu của cầu vồng rồi!"
-- "Các bạn hãy giúp tôi tìm lại những mảnh màu đó nhé..."
-- "Các bạn đã sẵn sàng chưa? Cùng bắt đầu thôi!"
+**Câu cố định** (pre-cache, nguồn: `app/scripts/gen_koon_voice.py` → dict `LINES`, gen ra `app/assets/audio/koon/*.wav`). Khi thiếu file, server tự fallback sang Kokoro động (`say()`) với nội dung tương đương.
+
+**Intro** (5 câu):
+- "Hello các bạn nhỏ! Mình là KOON đây! Hôm nay KOON rất vui vì được gặp tất cả các bạn."
+- "KOON muốn rủ các bạn đi tìm một điều thật kỳ diệu. Các bạn có thích ngắm cầu vồng không?"
+- "Ôa! KOON cũng thích lắm! Nhưng trên đường đến đây, KOON phát hiện cầu vồng đã vô tình làm rơi mất hết các màu sắc rồi. Các bạn có muốn trở thành những nhà thám hiểm nhí và giúp KOON tìm lại 7 sắc màu của cầu vồng không?"
+- "Ye! Mình nhớ Chị Gió từng nói... mỗi khi một bạn nhỏ trả lời đúng một câu hỏi thì một sắc màu sẽ quay trở lại... Các bạn đã sẵn sàng đồng hành cùng KOON chưa?"
+- "Vậy thì... chuyến phiêu lưu bắt đầu thôi!"
+
+> Lưu ý: KOON được phát âm là **"Cun"** (gen script tự thay `KOON` → `Cun` trước khi TTS).
 
 **Mỗi thử thách:**
-- "Câu hỏi thứ [n] màu [tên màu]: [câu hỏi]"
-- Đúng: "Chính xác! Đáp án là [answer]. Các bạn giỏi quá! Mảnh màu [màu] đã được tìm thấy!"
-- Sai: "Chưa đúng rồi các bạn ơi! Gợi ý nhé: [hint]. Các bạn thử lại xem?"
+- Câu hỏi (pre-cache `q{n}_question`): có câu dẫn cảm xúc theo màu (vd *"Ôa! KOON nhìn thấy mảnh màu đỏ rồi!..."*) + câu đố.
+- Câu hỏi chỉ đọc **1 lần**; khi bé sai **không đọc lại** (bấm **R** để đọc lại).
+- **Đúng (đáp án dự định)**: pre-cache `q{n}_right` (vd *"Đúng rồi! Chính là quả dưa hấu..."*).
+- **Đúng (đáp án thay thế hợp lý)**: LLM sinh reply động xác nhận (vd bé nói "ghế" cho câu "4 chân không đi" → *"Đúng rồi! Ghế cũng có bốn chân và không biết đi!"*).
+- **Sai**: LLM sinh reply hội thoại động (vd *"Sao lại là cà chua nhỉ? Cà chua không có vỏ xanh ruột đỏ đâu nha. Để mình gợi ý thêm:..."*). Không tiết lộ đáp án, gợi ý rõ hơn khi sai nhiều lần.
 
-**Outro:**
-- "Cảm ơn tất cả các bạn đã giúp Koon tìm lại đủ bảy sắc màu!..."
-- "Cảm ơn các bạn thật nhiều! Hẹn gặp lại vào những lần sau nhé! Tạm biệt!"
+**Recap + Magic** (sau cầu vồng hoàn thiện):
+- Pre-cache `90_recap`: *"Ôa! Chúng mình đã làm được rồi! Nhờ sự thông minh và nhiệt tình của các bạn mà cầu vồng đã tìm lại đủ 7 sắc màu..."*
+- **Magic reveal**: KOON bay ra giữa màn + particle sao/bụi cầu vồng + sound magic, nói: *"Và bây giờ... cùng KOON ngắm điều kỳ diệu nhé! Các bạn nhắm mắt lại nào... Ba, hai, một... phép màu xuất hiện!"* → flash trắng → phát video recap.
+
+**Outro** (sau video):
+- Pre-cache `99_goodbye`: *"Hóa ra điều kỳ diệu mà mình luôn tìm kiếm chính là những nụ cười, những bài học và những kỷ niệm đẹp... KOON chúc các bạn sẽ luôn chăm ngoan, học thật giỏi... Hẹn gặp lại các bạn trong những chuyến phiêu lưu tiếp theo nhé. Tạm biệt các bạn nhỏ!"*
