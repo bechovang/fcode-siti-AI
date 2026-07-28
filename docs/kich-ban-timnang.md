@@ -2,7 +2,7 @@
 
 > Trò 2 (Tìm Nắng). 3 đội A/B/C đối kháng. AI vision + TTS + WebSocket.
 > Tổng thời lượng ~5 phút (6 vòng).
-> Cập nhật 2026-07-29: Bỏ auto-timeout — operator (BTC) điều khiển tiến trình bằng nút "Bỏ qua vòng" / "Vòng kế"; vòng cũng tự kết khi cả 3 đội nhận diện đúng. Ép đúng (force_accept) giờ có Kokoro đọc thông báo.
+> Cập nhật 2026-07-29: Bỏ auto-timeout — operator (BTC) điều khiển tiến trình bằng nút "Bỏ qua vòng" / "Vòng kế"; vòng cũng tự kết khi cả 3 đội nhận diện đúng. Ép đúng (force_accept) giờ có Kokoro đọc thông báo. Số → chữ Việt trong TTS ("Vòng một" thay "Vòng 1") cho đọc rõ. Tổng kết vòng rút ngắn (giảm lag). Hết 6 vòng hiện **bảng xếp hạng** đầy đủ.
 
 ## Cấu trúc
 
@@ -12,7 +12,7 @@
    - 3 đội bốc mù trong thùng → giơ trước webcam → bấm NHẬN DIỆN
    - Vision AI chấm đúng/sai → đội đúng được xếp hạng nhất/nhì/ba → cộng điểm
    - Cả 3 đội xong → kết vòng; hoặc BTC bấm "Bỏ qua vòng" / "Vòng kế" (KHÔNG auto-timeout)
-3. **Tổng kết & Vô địch** (~30s) — AI tuyên bố đội vô địch + fanfare + banner.
+3. **Tổng kết & Vô địch** (~30s) — AI tuyên bố đội vô địch + **bảng xếp hạng** (1-2-3 + điểm) + fanfare + banner.
 
 ## 6 vật phẩm + vision prompt
 
@@ -61,14 +61,14 @@
 
 > "Chưa đúng rồi! Thử lại xem!"
 
-### Tổng kết vòng (TTS động)
+### Tổng kết vòng (TTS động, ngắn)
 
-> "Hết vòng {N}! Đội A về nhất, tổng 3 điểm. Đội B về nhì, tổng 2 điểm. Đội C chưa kịp."
-> (đội chưa nhận diện đúng → "chưa kịp"; đọc theo thứ tự về đích)
+> "Hết vòng một!" (chỉ báo hết vòng — từng đội đã được Kokoro đọc ngay lúc nhận diện đúng; điểm số chi tiết hiện trên bảng điểm)
 
-### Vô địch (TTS động + fanfare + banner)
+### Vô địch (TTS động + fanfare + banner + bảng xếp hạng)
 
-> "Xin chúc mừng Đội {tên} đã giành chiến thắng! Các bạn xứng đáng là những nhà Tìm Nắng tài ba! Vỗ tay nào!"
+> "Trò chơi kết thúc! Đội {tên} là nhà vô địch với {số} điểm! Chúc mừng các bạn! Cảm ơn tất cả đã tham gia!"
+> (đồng thời hiện **bảng xếp hạng** đầy đủ 🥇🥈🥉 + điểm, winner highlight vàng)
 
 ## Công nghệ triển khai
 

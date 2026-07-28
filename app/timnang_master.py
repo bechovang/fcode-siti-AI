@@ -21,7 +21,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import timnang_data as D
 from timnang_data import (OBJECTS, TEAMS, ROUNDS, RECOGNIZE_DEBOUNCE,
-                          SCORE_BY_ORDER, ORDER_WORD, AUDIO_DIR)
+                          SCORE_BY_ORDER, ORDER_WORD, AUDIO_DIR, num_vi)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
@@ -211,11 +211,11 @@ class Game:
             if self.phase not in ("playing", "announce"):
                 return
             self.phase = "round_end"
-        # Tổng kết vòng
+        # Tổng kết vòng (ngắn) + nhịp nghỉ rồi sang vòng kế
         summary = self._round_summary()
         await self.say(summary)
         await self.sync_scoreboard()
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
         if self.round_idx + 1 < ROUNDS:
             await self.start_round(self.round_idx + 1)
         else:
@@ -224,22 +224,30 @@ class Game:
     def _round_summary(self):
         if not self.object:
             return ""
-        ordered = sorted(self.teams.items(), key=lambda x: (x[1]["order"] is None, x[1]["order"] or 99))
-        parts = [f"Hết vòng {self.round_idx + 1}!"]
-        for tid, t in ordered:
-            if t["order"] is not None:
-                parts.append(f"{t['name']} về {ORDER_WORD.get(t['order'], t['order'])}, tổng {t['score']} điểm.")
-            else:
-                parts.append(f"{t['name']} chưa kịp.")
-        return " ".join(parts)
+        # Ngắn gọn để giảm lag chuyển vòng (đã đọc từng đội khi nhận diện đúng;
+        # chi tiết điểm số hiện trên bảng điểm). Số → chữ cho TTS đọc rõ.
+        return f"Hết vòng {num_vi(self.round_idx + 1)}!"
+
+    def ranking(self):
+        """Trả về danh sách đội xếp theo điểm giảm dần (dùng cho game_over)."""
+        return sorted(
+            [{"id": tid, "name": t["name"], "color": t["color"], "score": t["score"]}
+             for tid, t in self.teams.items()],
+            key=lambda r: r["score"], reverse=True,
+        )
 
     async def game_over(self):
         self.phase = "game_over"
-        winner_id, winner = max(self.teams.items(), key=lambda x: x[1]["score"])
-        # xử lý hoà: lấy đội đầu theo thứ tự
-        await self.say(f"Trò chơi kết thúc! {winner['name']} là nhà vô địch với {winner['score']} điểm! "
+        ranking = self.ranking()
+        winner = ranking[0]   # hoà → giữ thứ tự A/B/C (sort ổn định)
+        await self.say(f"Trò chơi kết thúc! {winner['name']} là nhà vô địch với {num_vi(winner['score'])} điểm! "
                        f"Chúc mừng các bạn! Cảm ơn tất cả đã tham gia!")
-        await self.broadcast_all({"type": "game_over", "winner": winner_id, "winner_name": winner["name"]})
+        await self.broadcast_all({
+            "type": "game_over",
+            "winner": winner["id"],
+            "winner_name": winner["name"],
+            "ranking": ranking,
+        })
         await self.sync_scoreboard()
 
     # ---- recognize (từ station) ----

@@ -13,6 +13,11 @@ Nội dung thoại lấy từ timnang_data.precache_lines() (nguồn sự thật
 import os
 import sys
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows console mặc định cp1252 → crash khi in tiếng Việt
+except Exception:
+    pass
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import timnang_data as D
 
