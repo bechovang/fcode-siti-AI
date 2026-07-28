@@ -104,19 +104,37 @@ python app/timnang_master.py
 
 ---
 
-## 🚀 Hướng dẫn chạy (Step-by-Step)
+## 🚀 Cài đặt & Chạy (Step-by-Step)
 
-### Yêu cầu
+> Hai trò chạy trên **2 port riêng**: Trò 1 (Cầu Vồng) :**8000**, Trò 2 (Tìm Nắng) :**8001**. Cài đặt chung cho cả hai — chỉ khác lệnh chạy ở bước cuối. Có thể chạy **cả hai cùng lúc** trên cùng máy.
+
+### Yêu cầu hệ thống
 
 | Thành phần | Yêu cầu |
 |---|---|
 | **Python** | ≥ 3.10 |
-| **Trình duyệt** | **Chrome hoặc Edge** (cần Web Speech API cho mic) |
-| **Mạng** | Cần internet (STT gửi audio lên Google/Azure) |
+| **Trình duyệt** | **Chrome hoặc Edge** (cần Web Speech API cho mic — Trò 1; webcam — Trò 2) |
+| **Mạng** | Internet khi: cài (pip), gen giọng edge-tts (tùy chọn), chạy LLM/vision (OpenRouter) và STT (Trò 1 gửi audio lên Google/Azure). **Sau khi gen Kokoro pre-cache xong, 2 trò vẫn phát được tại Gala dù mất mạng** (LLM tự fallback fuzzy match, Trò 2 operator duyệt tay). |
 | **RAM** | ≥ 4GB (khuyến nghị 8GB+) |
-| **CPU** | Đa lõi (TTS chạy ONNX CPU, ~5x realtime) |
-| **Ổ cứng** | ~2GB trống (cho model TTS Kokoro) |
-| **HĐH** | Windows (có thể chạy Linux/macOS) |
+| **CPU** | Đa lõi (TTS Kokoro chạy ONNX CPU, ~5x realtime) |
+| **Ổ cứng** | ~3GB trống (model Kokoro ~2GB + deps torch/onnxruntime) |
+| **HĐH** | Windows (test chính; có thể chạy Linux/macOS) |
+| **Webcam** | Trò 2 — 1 webcam mỗi trạm đội (dùng webcam laptop) |
+| **API key** | `OPENROUTER_API_KEY` — khuyến nghị mạnh (LLM chấm Trò 1 + vision Trò 2). Không có vẫn chạy được ở chế độ dự phòng. |
+
+### Tổng quan nhanh (tra cứu)
+
+| | **Trò 1 — Cầu Vồng** | **Trò 2 — Tìm Nắng** |
+|---|---|---|
+| Server | `python app/server.py` | `python app/timnang_master.py` |
+| Port | `8000` | `8001` |
+| Mở | http://localhost:8000 | http://localhost:8001/ (master) · /station/A · /B · /C |
+| Data | `app/koon_data.py` | `app/timnang_data.py` |
+| WS | `/ws` | `/ws/master` + `/ws/station/{team}` |
+| Pre-cache giọng | `app/scripts/gen_koon_voice.py` (28 câu) | `app/scripts/gen_timnang_voice.py` (16 câu) |
+| Cần API key | Có (LLM chấm + reply) | Có (vision chấm) |
+
+---
 
 ### Bước 1: Clone repo
 
@@ -125,13 +143,15 @@ git clone https://github.com/bechovang/fcode-siti-AI.git
 cd fcode-siti-AI
 ```
 
-### Bước 2: Cập nhật submodules
+### Bước 2: Cập nhật submodule Kokoro TTS
 
 ```bash
 git submodule update --init --recursive
 ```
 
-Lệnh này clone **Kokoro-Vietnamese** (TTS) — model ~2GB sẽ được download tự động khi chạy lần đầu.
+Lệnh này clone **`ref/Kokoro-Vietnamese`** (TTS tiếng Việt, submodule duy nhất). Model ONNX ~2GB sẽ được **download tự động lần đầu** khi khởi động server hoặc khi gen giọng.
+
+> Nếu clone bằng ZIP thay vì `git clone`, submodule sẽ trống → Kokoro không khởi động được. Phải clone qua git rồi chạy lệnh trên.
 
 ### Bước 3: Tạo virtual environment
 
@@ -141,11 +161,19 @@ python -m venv .venv
 .venv\Scripts\activate
 ```
 
+**PowerShell** (nếu báo lỗi chạy script bị chặn):
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+.venv\Scripts\Activate.ps1
+```
+
 **Linux/macOS:**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
+
+> Sau khi activate, dấu nhắc hiện `(.venv)`. **Mở terminal mới phải activate lại** trước khi chạy lệnh pip/python phía dưới.
 
 ### Bước 4: Cài Kokoro Vietnamese TTS (ONNX)
 
@@ -153,63 +181,150 @@ source .venv/bin/activate
 pip install -e "ref/Kokoro-Vietnamese[onnx]"
 ```
 
-> ⏱ Lần đầu cài có thể mất 5-10 phút (download torch, transformers, onnxruntime).
+> ⏱ Lần đầu cài **5–15 phút** (download `torch`, `transformers`, `onnxruntime` — nặng vài GB). Nếu mạng yếu, cài từng gói: `pip install torch` rồi mới chạy lệnh trên.
 
-### Bước 5: Cài các dependencies còn lại
+Kiểm tra: `python -c "from kokoro_vietnamese import KokoroVietnamese; print('OK')"` → in `OK`.
+
+### Bước 5: Cài các dependencies Python (cả 2 trò)
 
 ```bash
-pip install fastapi uvicorn openai rapidfuzz soundfile
+pip install -r app/requirements.txt
 ```
 
-### Bước 6: Sinh pre-cache giọng KOON (khuyến nghị)
+File `app/requirements.txt` gồm: `fastapi`, `uvicorn[standard]`, `openai` (→ OpenRouter), `rapidfuzz` (fuzzy match dự phòng), `soundfile` (ghi WAV Kokoro).
 
-Toàn bộ câu thoại cố định (intro, 7 câu hỏi, phản hồi đúng/sai, recap, goodbye) được **pre-cache** bằng giọng Kokoro để phát tức thì (không đợi synthesize runtime). File bị gitignore nên máy mới cần gen:
+**Cài thêm nếu muốn chạy test tự động Trò 2** (tùy chọn):
+```bash
+pip install websockets pillow
+```
+(cần cho `app/scripts/_tn_test.py` — test vision + WebSocket flow).
 
+### Bước 6: (Tùy chọn) Cài avatar Live2D KOON
+
+Avatar KOON lấy từ `ref/Open-LLM-VTuber/live2d-models/` (thư mục này **gitignore** — không có sau fresh clone). Nếu thiếu, Trò 1 **tự fallback về emoji 🦊**, vẫn chơi bình thường. Muốn có avatar động:
+
+```bash
+git clone https://github.com/Open-LLM-VTuber/Open-LLM-VTuber.git ref/Open-LLM-VTuber
+```
+
+Restart server → log hiện `Live2D: /live2d (mao_pro)` và `GET /health` trả `"live2d": true`. (Model `mao_pro` = Niziiro Mao, sample Live2D free-material.)
+
+### Bước 7: Sinh pre-cache giọng (chạy 1 lần — khuyến nghị mạnh)
+
+Toàn bộ câu thoại **cố định** (intro, câu hỏi, phản hồi đúng/sai, công bố vật phẩm, kết quả…) được **pre-cache** bằng giọng Kokoro để phát **tức thì** (<200ms) thay vì synthesize runtime (~1–2s mỗi câu). Các file nằm trong `app/assets/audio/` (đã gitignore) nên **máy mới phải tự gen**.
+
+**Trò 1 (KOON — 28 câu):**
 ```bash
 python app/scripts/gen_koon_voice.py
-# Đổi engine (tùy chọn):  KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py   → .mp3 edge-tts backup
 ```
+→ `app/assets/audio/koon/*.wav` (intro×5, q/right/wrong×7, recap, goodbye).
 
-Output: `app/assets/audio/koon/*.wav` (28 file, giọng `mai_linh`). Nếu bỏ qua, server vẫn chạy nhưng phát Kokoro động mỗi câu (chậm hơn ~1-2s).
-
-### Bước 7: Thiết lập API keys
-
-**Cần thiết** (nếu không có, LLM judge sẽ fallback về fuzzy match kém chính xác hơn):
-
-```cmd
-set OPENROUTER_API_KEY=sk-or-v1-...   # Windows
-```
-
+**Trò 2 (Tìm Nắng — 16 câu):**
 ```bash
-export OPENROUTER_API_KEY=sk-or-v1-...   # Linux/macOS
+python app/scripts/gen_timnang_voice.py
+```
+→ `app/assets/audio/timnang/*.wav` (intro×1, mở vòng×6, thông báo đúng/thứ tự×9).
+
+**Đổi engine gen (tùy chọn):**
+```bash
+KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py        # edge-tts vi-VN-HoaiMyNeural → .mp3 (backup, cần mạng)
+KOON_GEN_ENGINE=edge python app/scripts/gen_timnang_voice.py
+```
+- `kokoro` (mặc định): nhất quán với TTS động, **offline** sau khi gen. Khuyến nghị cho Gala.
+- `edge`: free, nhẹ, nhưng cần mạng và chất lượng thấp hơn.
+
+> Có thêm `app/scripts/gen_koon_voice_capcut.py` — biến thể dùng CapCut TTS (cần `ref/capcut-tts-api`). Chỉ khi muốn giọng CapCut thay Kokoro/edge.
+
+> **Bỏ qua bước này vẫn chạy được** — server sẽ synthesize Kokoro động mỗi câu (chậm hơn, nhưng 2 trò vẫn hoạt động đầy đủ).
+
+### Bước 8: Thiết lập API key (khuyến nghị mạnh)
+
+Trò 1 cần LLM chấm đáp án; Trò 2 cần vision chấm ảnh. Cả hai dùng chung `OPENROUTER_API_KEY`:
+
+**Windows (cmd):**
+```cmd
+set OPENROUTER_API_KEY=sk-or-v1-...
+```
+**Windows (PowerShell):**
+```powershell
+$env:OPENROUTER_API_KEY = "sk-or-v1-..."
+```
+**Linux/macOS:**
+```bash
+export OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/)
+👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/). **Không có key**: Trò 1 fallback fuzzy match (kém chính xác hơn), Trò 2 operator duyệt đúng/sai bằng tay.
 
-### Bước 8: Chạy server
+> Lưu ý: `set`/`$env:` chỉ có hiệu lực trong terminal hiện tại. Để dùng lâu dài, set trong System Environment Variables (Windows) hoặc `~/.bashrc`/`~/.zshrc` (Linux/mac).
+
+### Bước 9a: Chạy Trò 1 — Cầu Vồng (port 8000)
 
 ```bash
 python app/server.py
 ```
 
-Bạn sẽ thấy log:
-
+Log kỳ vọng:
 ```
 INFO TTS temp dir: C:\Users\...\koon_tts_xxx
 INFO LLM judge: OpenRouter openai/gpt-4o-mini
 INFO Kokoro TTS sẵn sàng (giọng mai_linh, device=cpu)
 INFO STT: browser Web Speech API (Chrome=Google / Edge=Azure)
+INFO Live2D: /live2d (mao_pro) — từ ref/Open-LLM-VTuber/live2d-models
 INFO Uvicorn running on http://0.0.0.0:8000
 ```
 
-### Bước 9: Mở trình duyệt (Chrome hoặc Edge)
+→ Mở **http://localhost:8000** bằng **Chrome/Edge**:
+- Bấm **"🧪 Test mic / STT"** để kiểm tra nhận diện giọng nói.
+- Bấm **"Bắt đầu"** → KOON sẽ chào và đặt câu hỏi!
 
-Vào **http://localhost:8000** bằng **Chrome/Edge** (cần Web Speech API cho mic).
+### Bước 9b: Chạy Trò 2 — Tìm Nắng (port 8001)
 
-- Bấm **"🧪 Test mic / STT"** để kiểm tra nhận diện giọng nói trước khi chơi.
-- Bấm **"Bắt đầu"** → KOON sẽ nói chuyện và đặt câu hỏi!
+```bash
+python app/timnang_master.py
+```
 
-> ⚠️ STT cần **internet** (audio gửi lên Google/Azure). Nếu truy cập bằng IP thay vì `localhost` (vd `http://192.168.x.x:8000`) thì phải dùng **HTTPS**, nếu không browser sẽ chặn mic.
+Log kỳ vọng:
+```
+INFO Vision/LLM: OpenRouter openai/gpt-4o-mini
+INFO Kokoro TTS sẵn sàng (giọng mai_linh)
+INFO Uvicorn running on http://0.0.0.0:8001
+```
+
+Mở các trang (Chrome/Edge):
+- **Master / scoreboard / operator**: http://localhost:8001/  ← máy chính nối màn LED + loa
+- **Trạm đội A / B / C**: http://\<master-ip\>:8001/station/A · /station/B · /station/C  ← mở trên laptop từng đội
+
+> Tìm `master-ip`: trên máy master chạy `ipconfig` (Windows) / `ifconfig` (Linux), lấy IPv4 (vd `192.168.1.50`).
+
+### Bước 9c: Chạy cả hai trò cùng lúc
+
+Mở **2 terminal riêng** (mỗi terminal `activate` venv rồi chạy 1 server):
+```bash
+# Terminal 1 — Trò 1
+python app/server.py            # :8000
+
+# Terminal 2 — Trò 2
+python app/timnang_master.py    # :8001
+```
+2 port khác nhau nên không xung đột. Trên sân khấu có thể chạy cả 2 trên cùng 1 máy chính.
+
+### Bước 10: Kiểm tra trạng thái
+
+```bash
+# Trò 1
+curl http://localhost:8000/health        # → {"tts":true,"llm":true,"stt":"web-speech","live2d":true,"video":...}
+
+# Trò 2
+curl http://localhost:8001/health        # → {"vision":true,"tts":true,...}
+```
+
+**Test tự động Trò 2** (cần server Trò 2 đang chạy + đã cài `websockets`/`pillow`):
+```bash
+python app/scripts/_tn_test.py           # vision judge + WS flow + recognize round-trip
+```
+
+> ⚠️ **Lưu ý mic trên mạng LAN (Trò 1)**: browser chỉ cho phép mic qua `localhost` hoặc **HTTPS**. Nếu trẻ truy cập bằng IP LAN (vd `http://192.168.x.x:8000`) thay vì `localhost`, phải chạy qua HTTPS (reverse proxy + chứng chỉ) — nếu không mic bị chặn. Trò 2 dùng webcam cũng chịu quy tắc tương tự (secure context).
 
 ---
 
@@ -251,18 +366,25 @@ set OR_MODEL=google/gemini-2.0-flash-001
 ### Sinh lại pre-cache giọng
 
 ```bash
+# Trò 1 — KOON (28 câu)
 python app/scripts/gen_koon_voice.py                          # Kokoro (mặc định) → .wav
 KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py     # edge-tts → .mp3 (backup)
+
+# Trò 2 — Tìm Nắng (16 câu)
+python app/scripts/gen_timnang_voice.py                       # Kokoro → .wav
+KOON_GEN_ENGINE=edge python app/scripts/gen_timnang_voice.py  # edge-tts → .mp3
 ```
 
 ### Toàn bộ biến môi trường
 
 | Biến | Mặc định | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS Kokoro (14 giọng VN) |
+| `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM (Trò 1) + vision (Trò 2) trên OpenRouter |
+| `OR_MODEL` | `openai/gpt-4o-mini` | ❌ | Model trên OpenRouter (cả 2 trò dùng chung) |
+| `KOON_VOICE` | `mai_linh` | ❌ | Giọng TTS Kokoro (14 giọng VN) — dùng cho cả 2 trò |
 | `KOON_GEN_ENGINE` | `kokoro` | ❌ | Engine gen pre-cache: `kokoro` (.wav) hoặc `edge` (.mp3) |
-| `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM chấm + sinh phản hồi |
-| `OR_MODEL` | `openai/gpt-4o-mini` | ❌ | Model LLM trên OpenRouter |
+| `KOON_VOICE_EDGE` | `vi-VN-HoaiMyNeural` | ❌ | Giọng edge-tts (chỉ dùng khi `KOON_GEN_ENGINE=edge`) |
+| `KOON_RATE` | `-5%` | ❌ | Tốc độ edge-tts (chỉ dùng khi `KOON_GEN_ENGINE=edge`) |
 
 ---
 
@@ -310,28 +432,36 @@ KOON_GEN_ENGINE=edge python app/scripts/gen_koon_voice.py     # edge-tts → .mp
 
 ```
 ├── app/                        # Ứng dụng Python chính
-│   ├── server.py               # 🎯 Trò 1 — FastAPI + WebSocket + Kokoro TTS + LLM chấm/reply
+│   ├── server.py               # 🎯 Trò 1 — FastAPI + WebSocket + Kokoro TTS + LLM chấm/reply (:8000)
 │   ├── koon_data.py            # 📦 Trò 1 — Dữ liệu 7 câu hỏi + đáp án + gợi ý + alias + path video
-│   ├── timnang_master.py       # 🎯 Trò 2 — FastAPI + WebSocket + Vision + Kokoro TTS + scoreboard
+│   ├── timnang_master.py       # 🎯 Trò 2 — FastAPI + WebSocket + Vision + Kokoro TTS + scoreboard (:8001)
 │   ├── timnang_data.py         # 📦 Trò 2 — 6 vật phẩm (vision_prompt) + 3 đội + điểm 3-2-1
+│   ├── requirements.txt        # 📦 Deps Python (fastapi/uvicorn/openai/rapidfuzz/soundfile)
 │   ├── assets/                 # (gitignored phần lớn)
-│   │   ├── audio/koon/         # 🔊 Pre-cache .wav Kokoro (28 file — gen bằng gen_koon_voice.py)
+│   │   ├── audio/
+│   │   │   ├── koon/           # 🔊 Pre-cache giọng KOON (28 câu — gen bằng gen_koon_voice.py)
+│   │   │   ├── timnang/        # 🔊 Pre-cache giọng Trò 2 (16 câu — gen bằng gen_timnang_voice.py)
+│   │   │   ├── koon_edge_backup/  # edge-tts backup (.mp3) cho KOON
+│   │   │   └── sfx/            # 🔉 Hiệu ứng âm thanh (webfx — sinh ở client, thường rỗng)
 │   │   └── video/              # 🎬 Video recap (.mp4 — thả file vào là chạy; ưu tiên recap.mp4)
 │   ├── scripts/                # Scripts phụ trợ
-│   │   ├── gen_koon_voice.py       # Sinh pre-cache giọng KOON (Kokoro mặc định / edge-tts backup)
-│   │   └── _tn_test.py             # 🧪 Test Trò 2 (vision + WS flow + recognize round-trip)
+│   │   ├── gen_koon_voice.py        # Sinh pre-cache giọng KOON (Kokoro mặc định / edge backup)
+│   │   ├── gen_timnang_voice.py     # Sinh pre-cache giọng Trò 2 (Kokoro / edge)
+│   │   ├── gen_koon_voice_capcut.py # Biến thể CapCut TTS (cần ref/capcut-tts-api)
+│   │   └── _tn_test.py              # 🧪 Test Trò 2 (vision + WS flow + recognize round-trip)
 │   └── static/
 │       ├── index.html          # 🖥 Trò 1 — Giao diện + Live2D KOON + magic transition + recap
 │       ├── timnang/            # 🖥 Trò 2 — master.html (scoreboard) + station.html (webcam đội)
 │       └── libs/               # 🧩 pixi v6 + Cubism core + pixi-live2d-display (vendor local)
 ├── docs/                       # Tài liệu dự án
 │   ├── source-brief.md         # Tổng hợp yêu cầu
-│   └── kich-ban-koon.md        # Kịch bản chi tiết
+│   ├── kich-ban-koon.md        # Kịch bản chi tiết Trò 1
+│   └── kich-ban-timnang.md     # Kịch bản chi tiết Trò 2
 ├── ref/                        # Reference implementations
-│   ├── Kokoro-Vietnamese/      # ✅ TTS tiếng Việt (ONNX, 14 giọng)
+│   ├── Kokoro-Vietnamese/      # ✅ TTS tiếng Việt (ONNX, 14 giọng) — submodule duy nhất (tracked)
 │   ├── Open-LLM-VTuber/        # 🦊 Nguồn model Live2D (mao_pro) — gitignore, không commit
 │   ├── pipecat/                # ⏸️ Real-time voice pipeline (future)
-│   └── ...                     # Các reference khác
+│   └── ...                     # Các reference khác (capcut-tts-api, v-tts, viet-asr...)
 ├── thongtin/                   # Tài liệu gốc (.docx)
 ├── .gitignore
 ├── .gitmodules
@@ -389,17 +519,20 @@ Thả bất kỳ `.mp4` nào vào `app/assets/video/` (ưu tiên `recap.mp4`, kh
 pip install -e "ref/Kokoro-Vietnamese[onnx]"
 ```
 
-### Lỗi port 8000 đã được dùng
+### Lỗi port đã được dùng (8000 / 8001)
 
 ```bash
 # Windows: tìm và kill process đang giữ port
-netstat -ano | findstr :8000
+netstat -ano | findstr :8000      # Trò 1 ; hoặc :8001 cho Trò 2
 taskkill /PID <PID> /F
 ```
+Vd quên tắt server Trò 1 rồi chạy lại → báo `address already in use` → kill theo PID rồi chạy lại.
 
-### Ko có OpenRouter key — server vẫn chạy được không?
+### Không có OpenRouter key — 2 trò vẫn chạy được không?
 
-Có. Server sẽ dùng **fuzzy match** (so khớp chữ cái) để chấm đáp án. Kém chính xác hơn LLM nhưng vẫn hoạt động.
+Có, nhưng ở chế độ dự phòng:
+- **Trò 1**: chấm đáp án bằng **fuzzy match** (so khớp chữ cái) — kém chính xác hơn LLM nhưng vẫn hoạt động.
+- **Trò 2**: vision tắt → operator **duyệt đúng/sai bằng tay** (nút *Ép đúng* trên master).
 
 ### Mic / STT không nhận giọng nói
 
