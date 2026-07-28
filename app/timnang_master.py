@@ -20,7 +20,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import timnang_data as D
-from timnang_data import (OBJECTS, TEAMS, ROUNDS, ROUND_TIMEOUT, RECOGNIZE_DEBOUNCE,
+from timnang_data import (OBJECTS, TEAMS, ROUNDS, RECOGNIZE_DEBOUNCE,
                           SCORE_BY_ORDER, ORDER_WORD, AUDIO_DIR)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -62,6 +62,11 @@ def get_tts():
         _tts = KokoroTTS(device="cpu", voice=voice)
         log.info("Kokoro TTS sẵn sàng (giọng %s)", voice)
     return _tts
+
+
+# Khởi tạo TTS ngay từ đầu (giống server.py Trò 1): load model một lần lúc boot,
+# tránh lazy-init block event-loop ở lần say() đầu tiên (gây kẹt flow end_round).
+_ = get_tts()
 
 
 # ---------- Vision judge ----------
@@ -107,7 +112,6 @@ class Game:
         }
         self.stations: dict[str, WebSocket] = {}   # team_id -> ws
         self.masters: set[WebSocket] = set()
-        self.round_task = None
         self.lock = asyncio.Lock()
 
     # ---- broadcast helpers ----
@@ -149,29 +153,35 @@ class Game:
 
     # ---- TTS (chỉ phát ở master = loa sân khấu) ----
     async def say(self, text: str):
+        """Synthesize Kokoro động + phát ở master. Không bao giờ raise/block caller
+        (bọc try/except + timeout) — để flow game (vd end_round) không bị kẹt khi TTS lỗi/chậm."""
         tts = get_tts()
         if not tts:
             log.info("[TTS skip] %s", text[:60])
             return
-        audio, _ = await asyncio.to_thread(tts.synthesize, text)
-        key = f"tts_{uuid.uuid4().hex}"
-        wav_path = os.path.join(TTS_DIR, f"{key}.wav")
-        sf.write(wav_path, audio, 24000)
-        await self.broadcast_masters({"type": "play_audio", "key": key})
+        try:
+            audio, _ = await asyncio.wait_for(asyncio.to_thread(tts.synthesize, text), timeout=15)
+            key = f"tts_{uuid.uuid4().hex}"
+            wav_path = os.path.join(TTS_DIR, f"{key}.wav")
+            sf.write(wav_path, audio, 24000)
+            await self.broadcast_masters({"type": "play_audio", "key": key})
+        except asyncio.TimeoutError:
+            log.warning("[TTS timeout] synthesize quá 15s, bỏ qua: %s", text[:60])
+        except Exception as e:
+            log.warning("[TTS lỗi] %s — bỏ qua: %s", e, text[:60])
         # (không dọn file ngay — để endpoint phục vụ; dọn định kỳ nếu cần)
 
     async def play_or_say(self, key: str, text: str):
-        """Phát pre-cache .wav (tức thì <200ms) nếu có; không thì Kokoro synthesize động."""
+        """Phát pre-cache .wav/.mp3 (tức thì <200ms) nếu có; không thì Kokoro synthesize động."""
         wav = os.path.join(AUDIO_DIR, f"{key}.wav")
-        if os.path.isfile(wav):
+        mp3 = os.path.join(AUDIO_DIR, f"{key}.mp3")
+        if os.path.isfile(wav) or os.path.isfile(mp3):
             await self.broadcast_masters({"type": "play_audio", "key": key})
             return
         await self.say(text)
 
     # ---- round flow ----
     async def start_game(self):
-        if self.round_task and not self.round_task.done():
-            self.round_task.cancel()
         for t in self.teams.values():
             t["score"] = 0; t["order"] = None
         self.round_idx = -1
@@ -192,22 +202,12 @@ class Game:
         await self.sync_scoreboard()
         await self.broadcast_stations({"type": "round", "object": self.object["name"], "vi": self.object["vi"]})
         await self.play_or_say(f"round_{self.object['id']}", D.round_text(idx, self.object))
-        if self.round_task and not self.round_task.done():
-            self.round_task.cancel()
-        self.round_task = asyncio.create_task(self._round_timer())
-
-    async def _round_timer(self):
-        try:
-            await asyncio.sleep(ROUND_TIMEOUT)
-            await self.end_round("timeout")
-        except asyncio.CancelledError:
-            pass
+        # KHÔNG tự timeout — ban tổ chức điều khiển tiến trình bằng nút
+        # "Bỏ qua vòng" (skip) / "Vòng kế" (next_round). Vòng cũng tự kết thúc
+        # khi cả 3 đội đều nhận diện đúng (all_done).
 
     async def end_round(self, reason):
         async with self.lock:
-            if self.round_task and not self.round_task.done():
-                self.round_task.cancel()
-                self.round_task = None
             if self.phase not in ("playing", "announce"):
                 return
             self.phase = "round_end"
@@ -288,6 +288,8 @@ class Game:
     # ---- operator ----
     async def force_accept(self, team):
         """Operator ép đúng cho đội (khi AI sai/chậm)."""
+        if team not in self.teams:
+            return
         async with self.lock:
             if self.phase != "playing":
                 return
@@ -301,18 +303,19 @@ class Game:
         log.info("Operator force_accept %s -> order %d (+%d)", team, order, pts)
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
                                         "points": pts, "msg": f"Đã duyệt! Về {ORDER_WORD.get(order, order)}! Cộng {pts} điểm!"})
+        await self.play_or_say(f"correct_{team}_{D.ORDER_KEY.get(order, 'x')}", D.correct_text(t['name'], order))
         await self.sync_scoreboard()
         if all(tt["order"] is not None for tt in self.teams.values()):
             await self.end_round("all_done")
 
     async def add_point(self, team, delta):
+        if team not in self.teams:
+            return
         async with self.lock:
             self.teams[team]["score"] += delta
         await self.sync_scoreboard()
 
     async def reset(self):
-        if self.round_task and not self.round_task.done():
-            self.round_task.cancel()
         self.phase = "idle"
         self.round_idx = -1
         self.object = None
@@ -351,10 +354,13 @@ async def audio(key: str):
     tts_wav = os.path.join(TTS_DIR, f"{extless}.wav")
     if os.path.isfile(tts_wav):
         return FileResponse(tts_wav, media_type="audio/wav")
-    # 2. Pre-cache Kokoro — .wav trong AUDIO_DIR (gen bằng gen_timnang_voice.py)
+    # 2. Pre-cache — .wav (Kokoro) hoặc .mp3 (edge backup) trong AUDIO_DIR
     pc_wav = os.path.join(AUDIO_DIR, f"{extless}.wav")
     if os.path.isfile(pc_wav):
         return FileResponse(pc_wav, media_type="audio/wav")
+    pc_mp3 = os.path.join(AUDIO_DIR, f"{extless}.mp3")
+    if os.path.isfile(pc_mp3):
+        return FileResponse(pc_mp3, media_type="audio/mpeg")
     return JSONResponse({"error": "not found", "key": key}, status_code=404)
 
 

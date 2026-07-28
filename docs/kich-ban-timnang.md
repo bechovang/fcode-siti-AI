@@ -2,16 +2,16 @@
 
 > Trò 2 (Tìm Nắng). 3 đội A/B/C đối kháng. AI vision + TTS + WebSocket.
 > Tổng thời lượng ~5 phút (6 vòng).
-> Cập nhật 2026-07-28: Hoàn thiện — vision GPT-4o-mini, pre-cache Kokoro, WebSocket master + 3 stations.
+> Cập nhật 2026-07-29: Bỏ auto-timeout — operator (BTC) điều khiển tiến trình bằng nút "Bỏ qua vòng" / "Vòng kế"; vòng cũng tự kết khi cả 3 đội nhận diện đúng. Ép đúng (force_accept) giờ có Kokoro đọc thông báo.
 
 ## Cấu trúc
 
 1. **Giới thiệu & khởi động** (~30s) — AI giới thiệu luật chơi.
-2. **6 vòng thi** (~4 phút, ~40s/vòng):
+2. **6 vòng thi** (~4 phút, BTC tự pace):
    - AI công bố vật phẩm cần tìm
    - 3 đội bốc mù trong thùng → giơ trước webcam → bấm NHẬN DIỆN
    - Vision AI chấm đúng/sai → đội đúng được xếp hạng nhất/nhì/ba → cộng điểm
-   - Hết 60s hoặc cả 3 đội xong → kết vòng
+   - Cả 3 đội xong → kết vòng; hoặc BTC bấm "Bỏ qua vòng" / "Vòng kế" (KHÔNG auto-timeout)
 3. **Tổng kết & Vô địch** (~30s) — AI tuyên bố đội vô địch + fanfare + banner.
 
 ## 6 vật phẩm + vision prompt
@@ -63,7 +63,8 @@
 
 ### Tổng kết vòng (TTS động)
 
-> "Hết giờ! Các đội hãy nhìn lên bảng điểm nhé! Đội {tên} đang dẫn đầu với {n} điểm!"
+> "Hết vòng {N}! Đội A về nhất, tổng 3 điểm. Đội B về nhì, tổng 2 điểm. Đội C chưa kịp."
+> (đội chưa nhận diện đúng → "chưa kịp"; đọc theo thứ tự về đích)
 
 ### Vô địch (TTS động + fanfare + banner)
 
@@ -133,5 +134,5 @@ python app/scripts/_tn_test.py
 | Nhận diện | TNV quan sát + ghi điểm | AI vision (GPT-4o-mini) tự chấm |
 | Gọi vật phẩm | MC hô | AI TTS tự đọc |
 | Bảng điểm | Sheet tay | Scoreboard real-time WebSocket |
-| Thời gian | 5 phút | ~5 phút (60s/vòng, 6 vòng) |
+| Thời gian | 5 phút | ~5 phút (BTC tự pace, 6 vòng) |
 | Người hỗ trợ | 3 TNV giám sát + MC | Trẻ tự phục vụ (không TNV) |

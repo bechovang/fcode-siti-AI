@@ -30,13 +30,13 @@ Trò đối kháng **3 đội** (A/B/C). Mỗi vòng AI gọi tên 1 vật phẩ
 - **Cách chơi**:
   - **Master** (màn LED sân khấu + loa): bảng điểm real-time, AI Kokoro công bố vật phẩm + kết quả + tổng kết, operator controls.
   - **3 trạm** (mỗi đội 1 laptop/tab): webcam + nút NHẬN DIỆN — trẻ **tự phục vụ hoàn toàn**, không cần người hỗ trợ.
-  - Đúng → xếp thứ tự về đích (nhất/nhì/ba) → cộng điểm, AI đọc thông báo. Sai → *"Chưa đúng rồi! Thử lại xem!"* (debounce 1.5s chống spam). Hết 60s hoặc cả 3 đội xong → kết vòng.
+  - Đúng → xếp thứ tự về đích (nhất/nhì/ba) → cộng điểm, AI đọc thông báo. Sai → *"Chưa đúng rồi! Thử lại xem!"* (debounce 1.5s chống spam). **Vòng kết thúc khi cả 3 đội đều đúng, hoặc operator bấm "Bỏ qua vòng" / "Vòng kế"** — KHÔNG auto-timeout, BTC tự điều khiển tiến trình theo tình hình sân khấu.
 - **Công nghệ**:
   - **Vision**: OpenRouter **GPT-4o-mini** (multimodal) chấm đúng/sai theo `vision_prompt` mỗi vật — chấp nhận góc nhìn khác, một phần vật cũng OK.
   - **TTS**: Kokoro Vietnamese (giọng `mai_linh`) — công bố vật phẩm + kết quả + tổng kết vòng + tuyên bố vô địch.
   - **Realtime**: FastAPI + WebSocket (1 master + 3 stations), bảng điểm push tức thì.
   - **UX sân khấu**: confetti + chime (Web Audio) khi đúng/về đích; fanfare 7 nốt + banner VÔ ĐỊCH khi kết thúc.
-  - **Operator**: ép đúng (khi AI sai/chậm), ± điểm thủ công, bỏ qua vòng, vòng kế, chạy lại.
+  - **Operator**: ép đúng (khi AI sai/chậm — Kokoro đọc thông báo luôn), ± điểm thủ công, **bỏ qua vòng / vòng kế (tự điều khiển tiến trình, không auto-timeout)**, chạy lại.
 - **Thời lượng**: ~5 phút
 - **Server**: FastAPI + WebSocket (`app/timnang_master.py`)
 

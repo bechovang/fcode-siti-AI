@@ -41,8 +41,9 @@ TEAMS = [
 SCORE_BY_ORDER = [3, 2, 1]
 
 ROUNDS = len(OBJECTS)      # 6 vòng = 6 vật phẩm (~5 phút)
-ROUND_TIMEOUT = 60         # giây tối đa mỗi vòng
 RECOGNIZE_DEBOUNCE = 1.5   # giây chờ giữa các lần bấm nhận diện của 1 đội
+# KHÔNG tự timeout mỗi vòng — ban tổ chức điều khiển tiến trình (Bỏ qua vòng / Vòng kế).
+# Vòng kết thúc khi cả 3 đội nhận diện đúng (all_done) hoặc operator bấm skip/next.
 
 # ---------- Thoại cố định (pre-cache TTS) ----------
 # ORDER_WORD: hiển thị/khi đọc. ORDER_KEY: hậu tố key pre-cache (không dấu).

@@ -97,10 +97,10 @@ Trò đối kháng **3 đội** (A/B/C). Mỗi vòng AI gọi tên 1 vật phẩ
 
 ### Thông số
 - Hình thức: **3 đội** đối kháng, mỗi đội 1 trạm laptop + webcam. Trẻ **tự phục vụ hoàn toàn**, không TNV/MC.
-- Thời lượng: **~5 phút** (6 vòng × 40s + intro + tổng kết).
+- Thời lượng: **~5 phút** (6 vòng, BTC tự pace + intro + tổng kết).
 - Cách chơi 1 vòng: AI TTS công bố vật phẩm → 3 đội đồng thời bốc mù trong thùng → giơ trước webcam → bấm NHẬN DIỆN → AI vision chấm → đúng → xếp hạng nhất/nhì/ba → cộng điểm.
 - Tính điểm **3-2-1**: đội đúng về nhất +3, nhì +2, ba +1.
-- Hết 60s hoặc cả 3 đội xong → kết vòng. 6 vòng → tổng kết đội vô địch.
+- Vòng kết thúc khi cả 3 đội đúng, hoặc operator bấm "Bỏ qua vòng" / "Vòng kế" (**KHÔNG auto-timeout**). 6 vòng → tổng kết đội vô địch.
 
 ### Giải pháp kỹ thuật
 - **Vision**: OpenRouter **GPT-4o-mini** (multimodal) — chấm đúng/sai theo `vision_prompt` mỗi vật. Chấp nhận góc nhìn khác, một phần vật cũng OK.
