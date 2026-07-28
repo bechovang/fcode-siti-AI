@@ -40,14 +40,55 @@ Trò đối kháng **3 đội** (A/B/C). Mỗi vòng AI gọi tên 1 vật phẩ
 - **Thời lượng**: ~5 phút
 - **Server**: FastAPI + WebSocket (`app/timnang_master.py`)
 
-**Chạy Trò 2** (port 8001 — tách khỏi Trò 1 :8000):
+#### 🚀 Chạy Trò 2 chi tiết (port 8001 — tách khỏi Trò 1 :8000)
+
 ```bash
+# Yêu cầu: venv đã activate + đã cài Kokoro + (nên có) OPENROUTER_API_KEY
 python app/timnang_master.py
 ```
-- **Master / scoreboard**: http://localhost:8001/
-- **Trạm đội A / B / C**: http://\<master-ip\>:8001/station/A · /B · /C
-- Cần `OPENROUTER_API_KEY` (không có → operator duyệt tay). Kokoro TTS dùng chung venv với Trò 1.
-- Test tự động: `python app/scripts/_tn_test.py` (vision + WS flow + recognize round-trip — cần server đang chạy trên :8001).
+Sẵn sàng khi log hiện:
+```
+INFO Kokoro TTS sẵn sàng (giọng mai_linh)
+INFO Uvicorn running on http://0.0.0.0:8001
+```
+Kiểm tra nhanh: `curl http://localhost:8001/health` → `{"ok":true,"tts":true,"vision":true,"teams":["A","B","C"],"rounds":6}`.
+
+**Mở các trang (Chrome/Edge):**
+
+| Trang | URL | Dùng cho |
+|---|---|---|
+| **Master / bảng điểm / operator** | http://localhost:8001/ | Máy chính → màn LED sân khấu + loa |
+| **Trạm đội A / B / C** | http://localhost:8001/station/A · /B · /C | Laptop mỗi đội (webcam + nút NHẬN DIỆN) |
+
+- **Test nhanh trên 1 máy**: mở master + 3 trạm bằng `localhost` (4 tab) là chơi đủ.
+- **Gala nhiều máy**: master trên máy chính; trạm mở trên laptop đội bằng **IP LAN** máy master, vd `http://192.168.1.3:8001/station/A`. Tìm IP: `ipconfig` (Windows) → dòng IPv4.
+
+> ⚠️ **Webcam cần secure-context**: browser chỉ mở webcam qua `localhost` hoặc `https`. Trạm mở bằng IP LAN (`http://192.168.1.3...`) sẽ bị **chặn webcam**. Trên sân khấu thật (mỗi đội 1 laptop) phải chạy server qua **HTTPS** (reverse proxy + chứng chỉ) thì webcam trạm mới mở được. Test tạm thì dùng `localhost` trên cùng máy.
+
+**Operator (BTC) — bấm trên trang Master:**
+
+| Nút / phím | Action | Khi nào dùng |
+|---|---|---|
+| **▶ Bắt đầu** (phím `Enter`) | `start` — intro → vòng 1 | Bắt đầu trò |
+| **↻ Chạy lại** (phím `Esc`) | `restart` — reset toàn bộ | Chơi lại từ đầu |
+| **⏭ Bỏ qua vòng** | `skip_round` — kết vòng (đọc tổng kết) → vòng kế | Vòng kẹt / muốn qua |
+| **⏭ Vòng kế** | `next_round` — nhảy thẳng vòng kế (không tổng kết) | Tiến nhanh |
+| **✓ Ép đúng** (mỗi đội) | `force_accept` — duyệt đội đúng, xếp hạng + Kokoro đọc | AI chấm sai/chậm |
+| **+1 / −1** (mỗi đội) | `add_point` — cộng/trừ điểm | Sửa điểm tay |
+
+> 🎛 **Không có auto-timeout** — BTC tự quyết lúc qua vòng. Vòng cũng **tự kết khi cả 3 đội đều nhận diện đúng** (all_done → Kokoro đọc tổng kết → vòng kế).
+
+**Luồng 1 vòng:**
+1. BTC bấm **▶ Bắt đầu** → Kokoro đọc intro → tự vào vòng 1.
+2. Mỗi vòng: Kokoro công bố vật phẩm → 3 đội bốc mù, giơ trước webcam, bấm **NHẬN DIỆN** (hoặc phím `Space` ở trạm).
+3. Vision GPT-4o-mini chấm → **đúng**: xếp nhất/nhì/ba + cộng điểm (3-2-1) + Kokoro đọc thông báo. **Sai**: *"Chưa đúng rồi! Thử lại xem!"* (debounce 1.5s chống spam).
+4. Cả 3 đội xong → Kokoro đọc tổng kết vòng → tự sang vòng kế. (Hoặc BTC bấm **Bỏ qua vòng** / **Vòng kế** bất cứ lúc nào.)
+5. Hết 6 vòng → Kokoro tuyên bố vô địch + fanfare 7 nốt + banner **VÔ ĐỊCH**.
+
+**Test tự động** (cần server :8001 đang chạy):
+```bash
+python app/scripts/_tn_test.py   # vision + WS flow + recognize round-trip
+```
 
 #### WebSocket Trò 2 (riêng, không dùng `/ws` của Trò 1)
 
@@ -283,19 +324,9 @@ INFO Uvicorn running on http://0.0.0.0:8000
 ```bash
 python app/timnang_master.py
 ```
+→ Mở **http://localhost:8001/** (master/operator) + **/station/A · /B · /C** (tram đội).
 
-Log kỳ vọng:
-```
-INFO Vision/LLM: OpenRouter openai/gpt-4o-mini
-INFO Kokoro TTS sẵn sàng (giọng mai_linh)
-INFO Uvicorn running on http://0.0.0.0:8001
-```
-
-Mở các trang (Chrome/Edge):
-- **Master / scoreboard / operator**: http://localhost:8001/  ← máy chính nối màn LED + loa
-- **Trạm đội A / B / C**: http://\<master-ip\>:8001/station/A · /station/B · /station/C  ← mở trên laptop từng đội
-
-> Tìm `master-ip`: trên máy master chạy `ipconfig` (Windows) / `ifconfig` (Linux), lấy IPv4 (vd `192.168.1.50`).
+📖 **Hướng dẫn chạy chi tiết** — operator controls (Bắt đầu/Bỏ qua vòng/Ép đúng…), chơi nhiều máy qua IP LAN, lưu ý webcam cần HTTPS, luồng 1 vòng, test — xem mục **"🚀 Chạy Trò 2 chi tiết"** ở phần Trò 2 phía trên.
 
 ### Bước 9c: Chạy cả hai trò cùng lúc
 
