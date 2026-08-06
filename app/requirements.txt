@@ -1,9 +1,26 @@
-# Trò Cầu Vồng (KOON) — backend
-fastapi
-uvicorn[standard]
-openai            # OpenRouter (OpenAI-compatible) — chấm đáp án
-rapidfuzz         # fuzzy match dự phòng khi chưa có LLM
-soundfile         # ghi file WAV từ Kokoro TTS
+# === Runtime deps (cả 2 trò) — pinned để build reproducible ===
+fastapi==0.140.13
+uvicorn[standard]==0.52.0
+openai==2.50.0            # OpenRouter (OpenAI-compatible) — chấm đáp án (Trò 1) + vision (Trò 2)
+rapidfuzz==3.14.5         # fuzzy match dự phòng khi chưa có LLM
+soundfile==0.14.0         # ghi file WAV từ Kokoro TTS
 
-# STT chạy ở browser (Web Speech API: Chrome=Edge) — không cần package Python.
-# TTS động: Kokoro Vietnamese — cài riêng:  pip install -e "ref/Kokoro-Vietnamese[onnx]"
+# === TTS engine (bắt buộc khi chạy thật / gen giọng) ===
+# Kokoro Vietnamese cài RIÊNG qua submodule (model ONNX ~2GB, không pip):
+#   pip install -e "ref/Kokoro-Vietnamese[onnx]"
+# edge-tts: engine backup cho gen pre-cache (KOON_GEN_ENGINE=edge) + _tn_test
+edge-tts==7.2.8
+
+# === Dev / test ===
+pytest==9.1.1
+pytest-asyncio==1.4.0
+ruff==0.16.0              # lint + format
+mypy==2.3.0               # type check (core/games/schemas)
+websockets==16.1.1        # (dự phòng — pytest suite dùng mock, không bắt buộc)
+pillow==12.3.0            # (dự phòng — tương tự)
+
+# STT chạy ở browser (Web Speech API) — không cần package Python.
+#
+# Optional: CapCut TTS variant (app/scripts/gen_koon_voice_capcut.py)
+#   phụ thuộc ref/capcut-tts-api (gitignored, không pip):
+#   từ capcut_tts_api import CapCutClient

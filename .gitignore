@@ -20,12 +20,18 @@ Thumbs.db
 Desktop.ini
 nul
 
-# IDE
+# IDE & Agent Configs
 .vscode/
 .idea/
+.claude/
+.agents/
+_bmad/
+
 
 # Audio assets (generated)
 app/assets/audio/
+*.wav
+
 
 # Video assets (recap — thả runtime: recap.mp4 hoặc bất kỳ .mp4 nào)
 app/assets/video/

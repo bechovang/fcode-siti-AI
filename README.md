@@ -85,9 +85,9 @@ Kiểm tra nhanh: `curl http://localhost:8001/health` → `{"ok":true,"tts":true
 4. Cả 3 đội xong → Kokoro đọc tổng kết vòng → tự sang vòng kế. (Hoặc BTC bấm **Bỏ qua vòng** / **Vòng kế** bất cứ lúc nào.)
 5. Hết 6 vòng → Kokoro tuyên bố vô địch + fanfare 7 nốt + banner **VÔ ĐỊCH**.
 
-**Test tự động** (cần server :8001 đang chạy):
+**Test tự động** (pytest, vision/LLM mock — không cần server/API key):
 ```bash
-python app/scripts/_tn_test.py   # vision + WS flow + recognize round-trip
+pytest tests/   # audio path-traversal, scoring/race-fix, WS json-robustness, judge, vision round-trip
 ```
 
 #### WebSocket Trò 2 (riêng, không dùng `/ws` của Trò 1)
@@ -238,7 +238,7 @@ File `app/requirements.txt` gồm: `fastapi`, `uvicorn[standard]`, `openai` (→
 ```bash
 pip install websockets pillow
 ```
-(cần cho `app/scripts/_tn_test.py` — test vision + WebSocket flow).
+(cần cho `app/scripts/_tn_test.py` — test manual cũ; pytest suite giờ dùng mock nên không bắt buộc).
 
 ### Bước 6: (Tùy chọn) Cài avatar Live2D KOON
 
@@ -350,9 +350,9 @@ curl http://localhost:8000/health        # → {"tts":true,"llm":true,"stt":"web
 curl http://localhost:8001/health        # → {"vision":true,"tts":true,...}
 ```
 
-**Test tự động Trò 2** (cần server Trò 2 đang chạy + đã cài `websockets`/`pillow`):
+**Test tự động** (pytest, mock — không cần server/API key, chạy từ repo root):
 ```bash
-python app/scripts/_tn_test.py           # vision judge + WS flow + recognize round-trip
+pytest tests/           # audio path-traversal, scoring/race-fix, WS json, judge, vision round-trip
 ```
 
 > ⚠️ **Lưu ý mic trên mạng LAN (Trò 1)**: browser chỉ cho phép mic qua `localhost` hoặc **HTTPS**. Nếu trẻ truy cập bằng IP LAN (vd `http://192.168.x.x:8000`) thay vì `localhost`, phải chạy qua HTTPS (reverse proxy + chứng chỉ) — nếu không mic bị chặn. Trò 2 dùng webcam cũng chịu quy tắc tương tự (secure context).
@@ -463,41 +463,51 @@ KOON_GEN_ENGINE=edge python app/scripts/gen_timnang_voice.py  # edge-tts → .mp
 
 ```
 ├── app/                        # Ứng dụng Python chính
-│   ├── server.py               # 🎯 Trò 1 — FastAPI + WebSocket + Kokoro TTS + LLM chấm/reply (:8000)
-│   ├── koon_data.py            # 📦 Trò 1 — Dữ liệu 7 câu hỏi + đáp án + gợi ý + alias + path video
-│   ├── timnang_master.py       # 🎯 Trò 2 — FastAPI + WebSocket + Vision + Kokoro TTS + scoreboard (:8001)
-│   ├── timnang_data.py         # 📦 Trò 2 — 6 vật phẩm (vision_prompt) + 3 đội + điểm 3-2-1
-│   ├── requirements.txt        # 📦 Deps Python (fastapi/uvicorn/openai/rapidfuzz/soundfile)
+│   ├── server.py               # 🚪 SHIM Trò 1 → games/cau_vong.build_app() (:8000)
+│   ├── timnang_master.py       # 🚪 SHIM Trò 2 → games/timnang.build_app() (:8001)
+│   ├── core/                   # 🧩 Shared infra (cả 2 trò): config, llm, tts, audio, ws, app_factory,
+│   │                           #    runtime, health, paths, constants, logging
+│   ├── schemas/                # 📐 Pydantic models: Challenge, GameObject, Team, TeamState + phase enums
+│   ├── games/
+│   │   ├── cau_vong/           # 🎯 Trò 1 logic: judge, session, flow, router, app (build_app)
+│   │   └── timnang/            # 🎯 Trò 2 logic: vision, game, router, app (build_app)
+│   ├── koon_data.py            # 📦 Trò 1 — 7 Challenge (typed) + script KOON (single source of truth)
+│   ├── timnang_data.py         # 📦 Trò 2 — 6 GameObject + 3 Team (typed) + scoring + precache_lines
+│   ├── requirements.txt        # 📦 Deps Python PINNED (fastapi/uvicorn/openai/rapidfuzz/soundfile/...)
 │   ├── assets/                 # (gitignored phần lớn)
 │   │   ├── audio/
 │   │   │   ├── koon/           # 🔊 Pre-cache giọng KOON (28 câu — gen bằng gen_koon_voice.py)
 │   │   │   ├── timnang/        # 🔊 Pre-cache giọng Trò 2 (16 câu — gen bằng gen_timnang_voice.py)
-│   │   │   ├── koon_edge_backup/  # edge-tts backup (.mp3) cho KOON
-│   │   │   └── sfx/            # 🔉 Hiệu ứng âm thanh (webfx — sinh ở client, thường rỗng)
+│   │   │   └── koon_edge_backup/  # edge-tts backup (.mp3) cho KOON
 │   │   └── video/              # 🎬 Video recap (.mp4 — thả file vào là chạy; ưu tiên recap.mp4)
 │   ├── scripts/                # Scripts phụ trợ
-│   │   ├── gen_koon_voice.py        # Sinh pre-cache giọng KOON (Kokoro mặc định / edge backup)
-│   │   ├── gen_timnang_voice.py     # Sinh pre-cache giọng Trò 2 (Kokoro / edge)
+│   │   ├── gen_koon_voice.py        # Wrapper sinh giọng KOON (LINES + normalize → run_engine)
+│   │   ├── gen_timnang_voice.py     # Wrapper sinh giọng Trò 2 (precache_lines → run_engine)
 │   │   ├── gen_koon_voice_capcut.py # Biến thể CapCut TTS (cần ref/capcut-tts-api)
-│   │   └── _tn_test.py              # 🧪 Test Trò 2 (vision + WS flow + recognize round-trip)
-│   └── static/
-│       ├── index.html          # 🖥 Trò 1 — Giao diện + Live2D KOON + magic transition + recap
-│       ├── timnang/            # 🖥 Trò 2 — master.html (scoreboard) + station.html (webcam đội)
-│       └── libs/               # 🧩 pixi v6 + Cubism core + pixi-live2d-display (vendor local)
-├── docs/                       # Tài liệu dự án
-│   ├── source-brief.md         # Tổng hợp yêu cầu
-│   ├── kich-ban-koon.md        # Kịch bản chi tiết Trò 1
-│   └── kich-ban-timnang.md     # Kịch bản chi tiết Trò 2
+│   │   └── _voice_gen_core.py       # 🔧 Shared gen logic (Kokoro/edge) — 2 wrapper cùng dùng
+│   └── static/                 # 🖥 Frontend (build-less HTML — chưa refactor)
+│       ├── index.html          #    Trò 1 — Live2D KOON + magic transition + recap
+│       ├── timnang/            #    Trò 2 — master.html (scoreboard) + station.html (webcam đội)
+│       └── libs/               #    pixi v6 + Cubism core + pixi-live2d-display (vendor local)
+├── tests/                      # 🧪 pytest (unit + integration, 21 test) — vision/LLM mock
+│   ├── conftest.py             #    thêm app/ vào sys.path
+│   ├── unit/                   #    audio sanitization, scoring/race-fix, WS json, Game 1 judge
+│   └── integration/            #    vision + recognize round-trip
+├── .github/workflows/ci.yml    # ✅ CI: ruff + mypy + pytest trên push/PR
+├── pyproject.toml              # ⚙️ config ruff + mypy + pytest
+├── requirements.lock           # 🔒 pip freeze đầy đủ (reproducible install)
+├── .env.example                # 📋 mẫu env vars
+├── docs/                       # Tài liệu dự án (source-brief, kịch bản 2 trò)
 ├── ref/                        # Reference implementations
 │   ├── Kokoro-Vietnamese/      # ✅ TTS tiếng Việt (ONNX, 14 giọng) — submodule duy nhất (tracked)
-│   ├── Open-LLM-VTuber/        # 🦊 Nguồn model Live2D (mao_pro) — gitignore, không commit
-│   ├── pipecat/                # ⏸️ Real-time voice pipeline (future)
-│   └── ...                     # Các reference khác (capcut-tts-api, v-tts, viet-asr...)
+│   └── ...                     # Open-LLM-VTuber (Live2D, gitignore), capcut-tts-api, v-tts, viet-asr...
 ├── thongtin/                   # Tài liệu gốc (.docx)
 ├── .gitignore
 ├── .gitmodules
 └── README.md
 ```
+
+> **Kiến trúc layered (refactor Phase 0-3)**: logic 2 trò tách thành `games/<name>/` + shared infra `core/` + typed `schemas/`. Entry point cũ (`app/server.py`, `app/timnang_master.py`) giờ là shim ~20 dòng → `build_app()`, giữ lệnh chạy `python app/server.py` / `python app/timnang_master.py` như cũ. WS contract / audio keys / `/health` shape không đổi.
 
 ---
 

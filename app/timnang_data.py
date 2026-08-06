@@ -1,7 +1,12 @@
 """Dữ liệu Trò 2 — Tìm Nắng Cùng AI (đối kháng 3 đội, nhận diện đồ vật).
 Nguồn sự thật cho master + stations + gen pre-cache TTS.
+
+Phase 2: OBJECTS/TEAMS giờ là Pydantic GameObject/Team (typed). Logic text builder
+dùng attribute access. Phase 0 fix: số→chữ (num_vi) để Kokoro đọc rõ.
 """
 import os
+
+from schemas.timnang import GameObject, Team
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(APP_DIR, "static", "timnang")
@@ -9,32 +14,32 @@ AUDIO_DIR = os.path.join(APP_DIR, "assets", "audio", "timnang")  # pre-cache TTS
 
 # 6 vật phẩm cần tìm. aliases không dùng cho vision (vision chấm ảnh) — giữ để
 # tham khảo/hiển thị. vision_prompt = mô tả tiếng Anh cho GPT-4o-mini.
-OBJECTS = [
-    {"id": "ball",  "name": "quả bóng tennis", "vi": "quả bóng tennis",
-     "aliases": ["bóng tennis", "quả bóng", "tennis"],
-     "vision_prompt": "a tennis ball (small, yellow-green, fuzzy)"},
-    {"id": "lavie", "name": "chai nước Lavie", "vi": "chai nước Lavie",
-     "aliases": ["lavie", "nước lavie", "chai nước"],
-     "vision_prompt": "a plastic bottle of Lavie mineral water (clear bottle, blue label, Vietnamese brand)"},
-    {"id": "coke",  "name": "chai Coca-Cola", "vi": "chai Coca-Cola",
-     "aliases": ["coca", "coca-cola", "coke"],
-     "vision_prompt": "a Coca-Cola bottle or can (red label, Coca-Cola brand)"},
-    {"id": "spoon", "name": "cái muỗng", "vi": "cái muỗng",
-     "aliases": ["muỗng", "thìa", "spoon"],
-     "vision_prompt": "a spoon (eating utensil)"},
-    {"id": "tote",  "name": "túi Tote", "vi": "túi Tote",
-     "aliases": ["túi tote", "túi vải", "tote"],
-     "vision_prompt": "a tote bag (cloth/fabric bag with two handles, flat)"},
-    {"id": "bowl",  "name": "cái tô nhựa", "vi": "cái tô nhựa",
-     "aliases": ["tô", "chén", "bowl"],
-     "vision_prompt": "a plastic bowl (round, colorful)"},
+OBJECTS: list[GameObject] = [
+    GameObject(id="ball",  name="quả bóng tennis", vi="quả bóng tennis",
+               aliases=["bóng tennis", "quả bóng", "tennis"],
+               vision_prompt="a tennis ball (small, yellow-green, fuzzy)"),
+    GameObject(id="lavie", name="chai nước Lavie", vi="chai nước Lavie",
+               aliases=["lavie", "nước lavie", "chai nước"],
+               vision_prompt="a plastic bottle of Lavie mineral water (clear bottle, blue label, Vietnamese brand)"),
+    GameObject(id="coke",  name="chai Coca-Cola", vi="chai Coca-Cola",
+               aliases=["coca", "coca-cola", "coke"],
+               vision_prompt="a Coca-Cola bottle or can (red label, Coca-Cola brand)"),
+    GameObject(id="spoon", name="cái muỗng", vi="cái muỗng",
+               aliases=["muỗng", "thìa", "spoon"],
+               vision_prompt="a spoon (eating utensil)"),
+    GameObject(id="tote",  name="túi Tote", vi="túi Tote",
+               aliases=["túi tote", "túi vải", "tote"],
+               vision_prompt="a tote bag (cloth/fabric bag with two handles, flat)"),
+    GameObject(id="bowl",  name="cái tô nhựa", vi="cái tô nhựa",
+               aliases=["tô", "chén", "bowl"],
+               vision_prompt="a plastic bowl (round, colorful)"),
 ]
 
 # 3 đội đối kháng.
-TEAMS = [
-    {"id": "A", "name": "Đội A", "color": "#e74c3c"},
-    {"id": "B", "name": "Đội B", "color": "#3498db"},
-    {"id": "C", "name": "Đội C", "color": "#2ecc71"},
+TEAMS: list[Team] = [
+    Team(id="A", name="Đội A", color="#e74c3c"),
+    Team(id="B", name="Đội B", color="#3498db"),
+    Team(id="C", name="Đội C", color="#2ecc71"),
 ]
 
 # Điểm theo thứ tự về đích mỗi vòng (nhất/nhì/chót).
@@ -68,8 +73,8 @@ INTRO_TEXT = ("Xin chào các bạn nhỏ! Chào mừng đến với trò chơi 
               "rồi bấm nút Nhận Diện. Đội nào đúng trước sẽ được điểm cao hơn. Bắt đầu nhé!")
 
 
-def round_text(idx: int, obj: dict) -> str:
-    return f"Vòng {num_vi(idx + 1)}! Các đội hãy tìm: {obj['name']}! Nhanh lên nhé, ba, hai, một, bắt đầu!"
+def round_text(idx: int, obj: GameObject) -> str:
+    return f"Vòng {num_vi(idx + 1)}! Các đội hãy tìm: {obj.name}! Nhanh lên nhé, ba, hai, một, bắt đầu!"
 
 
 def correct_text(team_name: str, order: int) -> str:
@@ -81,8 +86,8 @@ def precache_lines() -> dict:
     Bao gồm: intro (1) + mở vòng (6, theo vật phẩm) + thông báo đúng/thứ tự (9, đội×thứ)."""
     lines = {"intro": INTRO_TEXT}
     for i, obj in enumerate(OBJECTS):
-        lines[f"round_{obj['id']}"] = round_text(i, obj)
+        lines[f"round_{obj.id}"] = round_text(i, obj)
     for t in TEAMS:
         for order in (1, 2, 3):
-            lines[f"correct_{t['id']}_{ORDER_KEY[order]}"] = correct_text(t["name"], order)
+            lines[f"correct_{t.id}_{ORDER_KEY[order]}"] = correct_text(t.name, order)
     return lines

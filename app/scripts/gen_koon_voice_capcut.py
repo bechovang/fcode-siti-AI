@@ -4,18 +4,19 @@ nên phải poll thủ công). Batch tất cả câu trong 1 task.
 
 Chạy:  python app/scripts/gen_koon_voice_capcut.py
 """
-import sys
-import os
 import json
+import os
+import sys
 import time
 from pathlib import Path
+
 import requests
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))                                   # để import LINES
 sys.path.insert(0, str(HERE.parent.parent / "ref" / "capcut-tts-api"))
-from gen_koon_voice import LINES                                # dùng chung dict câu thoại
 from capcut_tts_api import CapCutClient
+from gen_koon_voice import LINES  # dùng chung dict câu thoại
 
 VOICE = os.environ.get("CAPCUT_VOICE", "BV421_vivn_streaming")  # Nhỏ Ngọt Ngào (vi-VN)
 OUT = HERE.parent / "assets" / "audio" / "koon"

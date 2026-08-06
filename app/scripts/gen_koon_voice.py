@@ -8,13 +8,16 @@ Chọn engine:  KOON_GEN_ENGINE=kokoro (mặc định)  |  KOON_GEN_ENGINE=edge
 Output: app/assets/audio/koon/<key>.{wav|mp3} — phát local tại Gala (không cần mạng khi đã gen xong).
 
 LINES là nguồn sự thật duy nhất cho nội dung thoại (dùng chung cho cả 2 engine).
+Logic gen (Kokoro/edge loop, ok/fail, exit) nằm trong _voice_gen_core (share với Trò 2).
 """
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # import _voice_gen_core
+from _voice_gen_core import run_engine
+
 ENGINE = os.environ.get("KOON_GEN_ENGINE", "kokoro").strip().lower()
-OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "audio", "koon")
-OUT = os.path.abspath(OUT)
+OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "audio", "koon"))
 
 # Toàn bộ câu thoại cố định của KOON (nguồn: docs/kich-ban-koon.md)
 LINES = {
@@ -64,64 +67,5 @@ def _normalize(text: str) -> str:
     return text.replace("KOON", "Cun")
 
 
-# ---------------------------------------------------------------- Kokoro (.wav)
-def gen_kokoro():
-    import soundfile as sf
-    from kokoro_vietnamese import KokoroVietnamese as KokoroTTS
-
-    voice = os.environ.get("KOON_VOICE", "mai_linh")
-    tts = KokoroTTS(device="cpu", voice=voice)
-    os.makedirs(OUT, exist_ok=True)
-    ok, fail = 0, 0
-    for key, text in LINES.items():
-        path = os.path.join(OUT, f"{key}.wav")
-        try:
-            audio, _phonemes = tts.synthesize(_normalize(text))
-            sf.write(path, audio, 24000)
-            print(f"OK   {key}")
-            ok += 1
-        except Exception as e:
-            print(f"FAIL {key}: {e}")
-            fail += 1
-    print(f"\nKokoro [{voice}] xong: {ok} OK, {fail} FAIL — output: {OUT}")
-    if fail:
-        sys.exit(1)
-
-
-# ------------------------------------------------------------------ edge (.mp3)
-def gen_edge():
-    import asyncio
-    import edge_tts
-
-    VOICE = os.environ.get("KOON_VOICE_EDGE", "vi-VN-HoaiMyNeural")
-    RATE = os.environ.get("KOON_RATE", "-5%")
-
-    async def _run():
-        os.makedirs(OUT, exist_ok=True)
-        ok, fail = 0, 0
-        for key, text in LINES.items():
-            path = os.path.join(OUT, f"{key}.mp3")
-            try:
-                comm = edge_tts.Communicate(_normalize(text), VOICE, rate=RATE)
-                await comm.save(path)
-                print(f"OK   {key}")
-                ok += 1
-            except Exception as e:
-                print(f"FAIL {key}: {e}")
-                fail += 1
-        print(f"\nEdge [{VOICE}] xong: {ok} OK, {fail} FAIL — output: {OUT}")
-        if fail:
-            sys.exit(1)
-
-    asyncio.run(_run())
-
-
 if __name__ == "__main__":
-    print(f"Engine: {ENGINE}  |  output dir: {OUT}")
-    if ENGINE == "edge":
-        gen_edge()
-    elif ENGINE == "kokoro":
-        gen_kokoro()
-    else:
-        print(f"ENGINE không hợp lệ: {ENGINE} (dùng 'kokoro' hoặc 'edge')")
-        sys.exit(2)
+    run_engine(ENGINE, LINES, OUT, normalize=_normalize)

@@ -1,0 +1,43 @@
+# Tool config (ruff + mypy + pytest). Packaging ([project]) sẽ thêm ở Phase 4.
+# Python >= 3.10 (per README).
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Lint vừa phải: errors, pyflakes, warnings, isort, pyupgrade, bugbear.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # line too long — string literal tiếng Việt dài không tránh được
+    "B008",   # function call in default argument (FastAPI Depends pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]           # import sau sys.path manipulation trong conftest
+"app/scripts/*" = ["E402"]     # script thường cần sys.path.insert trước khi import sibling
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"   # runtime là 3.12; numpy 2.5 stub cần >=3.12 để parse. Code vẫn 3.10+ compatible.
+# Pragmatic — codebase đang chuyển dần sang typed (Phase 2 mới typed domain models).
+# Không bắt buộc annotate mọi hàm, nhưng check code đã annotate + Pydantic models.
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+# Không có type stubs cho các lib này.
+module = ["kokoro_vietnamese.*", "edge_tts.*", "soundfile.*", "rapidfuzz.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
