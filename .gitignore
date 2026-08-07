@@ -38,6 +38,9 @@ _bmad-output/
 .mypy_cache/
 .ruff_cache/
 
+# Local tooling config
+.commandcode/
+
 # Reference projects (some may have embedded .git, some are plain dirs)
 # Ignore submodule working trees and untracked content
 ref/Open-LLM-VTuber/

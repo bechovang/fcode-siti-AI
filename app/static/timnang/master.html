@@ -129,6 +129,10 @@ TEAMS.forEach(t => {
 });
 
 const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/master');
+// Báo server khi phát xong (server chờ intro phát trọn vẹn trước khi vào vòng 1).
+// onerror cũng báo để server không treo chờ nếu file audio lỗi/thiếu.
+player.onended = () => { try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {} };
+player.onerror = () => { try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {} };
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   switch (m.type) {

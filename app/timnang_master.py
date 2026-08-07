@@ -113,6 +113,33 @@ class Game:
         self.stations: dict[str, WebSocket] = {}   # team_id -> ws
         self.masters: set[WebSocket] = set()
         self.lock = asyncio.Lock()
+        # Chờ master phát xong audio (audio_ended) — dùng cho intro để không bị
+        # thông báo vòng 1 đè lên. Event set = không có gì đang chờ.
+        self._audio_done = asyncio.Event()
+        self._audio_done.set()
+        self._tasks: set[asyncio.Task] = set()  # giữ ref task nền (start_game)
+
+    # ---- audio wait helpers ----
+    def interrupt_audio(self):
+        """Giải phóng điểm chờ audio để op của operator được xử lý ngay."""
+        self._audio_done.set()
+
+    async def _wait_audio(self, timeout: float = 60.0):
+        """Chờ master báo audio_ended (phát xong). Không có master → bỏ qua;
+        timeout → đi tiếp (không treo flow vĩnh viễn)."""
+        if not self.masters:
+            return
+        try:
+            await asyncio.wait_for(self._audio_done.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            log.warning("[audio] không có audio_ended sau %.0fs — đi tiếp", timeout)
+
+    def _spawn(self, coro):
+        """Chạy coroutine nền (vd start_game) mà không block vòng nhận WS của master."""
+        t = asyncio.create_task(coro)
+        self._tasks.add(t)
+        t.add_done_callback(self._tasks.discard)
+        return t
 
     # ---- broadcast helpers ----
     async def _send(self, ws, msg):
@@ -152,45 +179,68 @@ class Game:
         await self.broadcast_all(self.scoreboard_msg())
 
     # ---- TTS (chỉ phát ở master = loa sân khấu) ----
-    async def say(self, text: str):
+    async def say(self, text: str, wait: bool = False) -> bool:
         """Synthesize Kokoro động + phát ở master. Không bao giờ raise/block caller
-        (bọc try/except + timeout) — để flow game (vd end_round) không bị kẹt khi TTS lỗi/chậm."""
+        (bọc try/except + timeout) — để flow game (vd end_round) không bị kẹt khi TTS lỗi/chậm.
+        wait=True → chờ master phát xong (audio_ended) trước khi đi tiếp (dùng cho intro).
+        Trả True nếu đã broadcast audio."""
         tts = get_tts()
         if not tts:
             log.info("[TTS skip] %s", text[:60])
-            return
+            return False
         try:
             audio, _ = await asyncio.wait_for(asyncio.to_thread(tts.synthesize, text), timeout=15)
             key = f"tts_{uuid.uuid4().hex}"
             wav_path = os.path.join(TTS_DIR, f"{key}.wav")
             sf.write(wav_path, audio, 24000)
+            if wait:
+                self._audio_done.clear()
             await self.broadcast_masters({"type": "play_audio", "key": key})
+            if wait:
+                await self._wait_audio()
+            return True
         except asyncio.TimeoutError:
             log.warning("[TTS timeout] synthesize quá 15s, bỏ qua: %s", text[:60])
         except Exception as e:
             log.warning("[TTS lỗi] %s — bỏ qua: %s", e, text[:60])
+        return False
         # (không dọn file ngay — để endpoint phục vụ; dọn định kỳ nếu cần)
 
-    async def play_or_say(self, key: str, text: str):
-        """Phát pre-cache .wav/.mp3 (tức thì <200ms) nếu có; không thì Kokoro synthesize động."""
+    async def play_or_say(self, key: str, text: str, wait: bool = False):
+        """Phát pre-cache .wav/.mp3 (tức thì <200ms) nếu có; không thì Kokoro synthesize động.
+        wait=True → chờ master phát xong trước khi đi tiếp."""
         wav = os.path.join(AUDIO_DIR, f"{key}.wav")
         mp3 = os.path.join(AUDIO_DIR, f"{key}.mp3")
         if os.path.isfile(wav) or os.path.isfile(mp3):
+            if wait:
+                self._audio_done.clear()
             await self.broadcast_masters({"type": "play_audio", "key": key})
+            if wait:
+                await self._wait_audio()
             return
-        await self.say(text)
+        await self.say(text, wait=wait)
 
     # ---- round flow ----
     async def start_game(self):
-        for t in self.teams.values():
-            t["score"] = 0; t["order"] = None
-        self.round_idx = -1
-        self.phase = "announce"
+        async with self.lock:
+            if self.phase in ("announce", "playing", "round_end"):
+                log.info("start_game bỏ qua — game đang chạy (phase=%s)", self.phase)
+                return
+            for t in self.teams.values():
+                t["score"] = 0; t["order"] = None
+            self.round_idx = -1
+            self.phase = "announce"
         await self.broadcast_masters({"type": "stop_audio"})  # dừng TTS cũ trước khi vào intro
+        self._audio_done.set()
         await self.broadcast_all({"type": "reset"})
         await self.sync_scoreboard()
-        await self.play_or_say("intro", D.INTRO_TEXT)
-        await asyncio.sleep(0.5)
+        # CHỜ intro phát trọn vẹn rồi mới vào vòng 1 — tránh thông báo vòng 1 đè lên
+        # intro (master chỉ có 1 thẻ <audio>, set src mới = cắt audio đang phát).
+        await self.play_or_say("intro", D.INTRO_TEXT, wait=True)
+        async with self.lock:
+            if self.phase != "announce":
+                return  # operator can thiệp giữa intro (restart) → không tự vào vòng
+        await asyncio.sleep(0.3)
         await self.start_round(0)
 
     async def start_round(self, idx):
@@ -208,7 +258,12 @@ class Game:
 
     async def end_round(self, reason):
         async with self.lock:
-            if self.phase not in ("playing", "announce"):
+            if self.phase == "announce":
+                # "Bỏ qua vòng" lúc intro đang đọc → chỉ rút ngắn intro; start_game
+                # sẽ tự vào vòng 1 (tránh đọc "Hết vòng không!" + đúp vòng 1).
+                self.interrupt_audio()
+                return
+            if self.phase != "playing":
                 return
             self.phase = "round_end"
         # Tổng kết vòng (ngắn) + nhịp nghỉ rồi sang vòng kế
@@ -259,15 +314,30 @@ class Game:
             t = self.teams[team]
             now = time.time()
             if t["order"] is not None:
-                return  # đã về đích vòng này
+                # đã về đích vòng này — PHẢI trả result để trạm thoát trạng thái
+                # "Đang nhận diện..." và nút bấm không kẹt disabled vĩnh viễn.
+                await self._send_station(team, {"type": "result", "correct": None,
+                                                "msg": "Đội mình đã về đích vòng này rồi!"})
+                return
             if now - t["last_rec"] < RECOGNIZE_DEBOUNCE:
                 await self._send_station(team, {"type": "result", "correct": False, "msg": "Chờ một chút rồi bấm lại nhé!"})
                 return
             t["last_rec"] = now
+            # Ghi nhớ vòng hiện tại để phát hiện kết quả "xuyên vòng" sau khi vision về
+            rec_round = self.round_idx
+            rec_obj_id = self.object["id"]
         # vision (ngoài lock để song song)
         correct = await judge_vision(image_b64, self.object)
         async with self.lock:
             t = self.teams[team]
+            # Kết quả vision về muộn: nếu đã không còn playing hoặc vòng/vật phẩm đã
+            # đổi (BTC bỏ qua/chuyển vòng trong lúc vision chạy) → LOẠI kết quả cũ,
+            # không cộng điểm nhầm vào vòng kế tiếp.
+            if (self.phase != "playing" or self.round_idx != rec_round
+                    or not self.object or self.object["id"] != rec_obj_id):
+                await self._send_station(team, {"type": "result", "correct": None,
+                                                "msg": "Vòng đã chuyển — kết quả không được tính."})
+                return
             if correct is None:
                 await self._send_station(team, {"type": "result", "correct": None,
                                                 "msg": "AI không chắc — nhờ cô chú duyệt giúp!"})
@@ -330,6 +400,7 @@ class Game:
         for t in self.teams.values():
             t["score"] = 0; t["order"] = None
         await self.broadcast_masters({"type": "stop_audio"})  # dừng TTS đang phát khi chạy lại
+        self._audio_done.set()  # giải phóng điểm chờ audio (intro) nếu có
         await self.broadcast_all({"type": "reset"})
         await self.sync_scoreboard()
 
@@ -421,11 +492,16 @@ async def ws_master(ws: WebSocket):
         while True:
             msg = json.loads(await ws.receive_text())
             t = msg.get("type")
-            if t == "op":
+            if t == "audio_ended":
+                game.interrupt_audio()
+            elif t == "op":
                 a = msg.get("action")
                 if a == "start":
-                    await game.start_game()
+                    # Chạy nền để vòng nhận WS của master không bị block trong lúc
+                    # chờ intro phát xong (operator vẫn bấm được nút khác ngay).
+                    game._spawn(game.start_game())
                 elif a == "restart":
+                    game.interrupt_audio()
                     await game.reset()
                 elif a == "force_accept":
                     await game.force_accept(msg.get("team"))
@@ -434,11 +510,14 @@ async def ws_master(ws: WebSocket):
                 elif a == "skip_round":
                     await game.end_round("skip")
                 elif a == "next_round":
-                    nxt = game.round_idx + 1
-                    if nxt < ROUNDS:
-                        await game.start_round(nxt)
+                    if game.phase == "announce":
+                        game.interrupt_audio()  # bỏ qua intro, start_game tự vào vòng 1
                     else:
-                        await game.game_over()
+                        nxt = game.round_idx + 1
+                        if nxt < ROUNDS:
+                            await game.start_round(nxt)
+                        else:
+                            await game.game_over()
     except WebSocketDisconnect:
         log.info("Master ngắt")
         game.masters.discard(ws)
