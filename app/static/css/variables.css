@@ -1,0 +1,377 @@
+/* ============================================
+   CSS VARIABLES - Kid-Friendly UI Design System
+   ============================================ */
+
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700&family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap');
+
+/* ============================================
+   COLOR PALETTE
+   ============================================ */
+
+/* Sky Backgrounds - Daytime theme cho trẻ em */
+:root {
+  --sky-day-start: #87CEEB;      /* Sky Blue */
+  --sky-day-mid: #B0E0E6;        /* Powder Blue */
+  --sky-day-end: #E0F7FA;        /* Light Cyan */
+  --sky-day: linear-gradient(180deg, #87CEEB 0%, #B0E0E6 50%, #E0F7FA 100%);
+
+  --sky-evening-start: #7B68EE;  /* Medium Purple */
+  --sky-evening-mid: #9370DB;    /* Medium Purple */
+  --sky-evening-end: #DDA0DD;    /* Plum */
+  --sky-evening: linear-gradient(180deg, #7B68EE 0%, #9370DB 50%, #DDA0DD 100%);
+
+  --night-start: #483D8B;        /* Dark Slate Blue */
+  --night-mid: #6A5ACD;          /* Slate Blue */
+  --night-end: #8470FF;          /* Blue Purple */
+  --night: linear-gradient(180deg, #483D8B 0%, #6A5ACD 50%, #8470FF 100%);
+}
+
+/* Rainbow Colors - Pastel & Vibrant cho cầu vồng */
+:root {
+  --rainbow-1: #FF6B6B;  /* Red - softer hơn */
+  --rainbow-2: #FFA500;  /* Orange */
+  --rainbow-3: #FFD93D;  /* Yellow - warmer */
+  --rainbow-4: #6BCF7F;  /* Green - brighter */
+  --rainbow-5: #4ECDC4;  /* Cyan - playful hơn blue */
+  --rainbow-6: #A78BFA;  /* Purple - softer */
+  --rainbow-7: #F06595;  /* Pink - fun hơn indigo */
+}
+
+/* Team Colors (Game 2 - Tìm Nắng) */
+:root {
+  --team-a: #FF6B6B;  /* Red */
+  --team-b: #4ECDC4;  /* Teal */
+  --team-c: #FFE66D;  /* Yellow */
+  --team-d: #95E1D3;  /* Mint - optional 4th team */
+}
+
+/* UI Element Colors */
+:root {
+  --button-primary: #FFD93D;         /* Yellow cho main CTAs */
+  --button-primary-dark: #FFC107;    /* Darker yellow */
+  --button-primary-border: #FFA000;  /* Orange border */
+  --button-secondary: #6BCF7F;       /* Green cho success */
+  --button-secondary-dark: #4CAF50;  /* Darker green */
+  --button-secondary-border: #388E3C; /* Green border */
+  --button-accent: #FF6B6B;          /* Red cho important actions */
+
+  --glass-bg: rgba(255, 255, 255, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.5);
+
+  --text-dark: #2D3436;              /* Dark gray cho light backgrounds */
+  --text-light: #FFFFFF;             /* White cho dark backgrounds */
+  --text-muted: #9E9E9E;             /* Muted gray */
+
+  --shadow-soft: rgba(0, 0, 0, 0.1);
+  --shadow-medium: rgba(0, 0, 0, 0.15);
+  --shadow-strong: rgba(0, 0, 0, 0.2);
+
+  --glow-primary: rgba(255, 217, 61, 0.3);
+  --glow-secondary: rgba(107, 207, 127, 0.3);
+  --glow-accent: rgba(255, 107, 107, 0.3);
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+
+:root {
+  /* Font Families */
+  --font-display: 'Fredoka One', 'Nunito', 'Comic Sans MS', 'Segoe UI', sans-serif;
+  --font-body: 'Nunito', 'Quicksand', 'Segoe UI', sans-serif;
+  --font-accent: 'Baloo 2', 'Fredoka One', cursive;
+  --font-mono: 'Courier New', monospace;
+
+  /* Font Weights */
+  --weight-light: 400;
+  --weight-normal: 500;
+  --weight-bold: 600;
+  --weight-display: 700;
+
+  /* Font Sizes - Responsive với clamp() */
+  --font-xs: clamp(12px, 2vw, 14px);
+  --font-sm: clamp(14px, 2vw, 18px);
+  --font-md: clamp(16px, 2.5vw, 22px);
+  --font-lg: clamp(18px, 3vw, 28px);
+  --font-xl: clamp(20px, 3.5vw, 36px);
+  --font-2xl: clamp(24px, 4.5vw, 48px);
+  --font-3xl: clamp(32px, 6vw, 72px);
+  --font-4xl: clamp(48px, 8vw, 96px);
+  --font-5xl: clamp(64px, 12vw, 160px);
+
+  /* Line Heights */
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+}
+
+/* ============================================
+   SPACING SYSTEM
+   ============================================ */
+
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 20px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+}
+
+/* ============================================
+   BORDER RADIUS
+   ============================================ */
+
+:root {
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-xl: 32px;
+  --radius-full: 50%;
+  --radius-pill: 50px;
+}
+
+/* ============================================
+   SHADOWS
+   ============================================ */
+
+:root {
+  --shadow-xs: 0 2px 8px var(--shadow-soft);
+  --shadow-sm: 0 4px 12px var(--shadow-soft);
+  --shadow-md: 0 6px 16px var(--shadow-medium);
+  --shadow-lg: 0 8px 24px var(--shadow-medium);
+  --shadow-xl: 0 12px 32px var(--shadow-strong);
+  --shadow-2xl: 0 16px 48px var(--shadow-strong);
+
+  /* 3D Button Shadows */
+  --shadow-button-primary: 0 8px 0 var(--button-primary-border);
+  --shadow-button-secondary: 0 6px 0 var(--button-secondary-border);
+
+  /* Glow Effects */
+  --glow-sm: 0 0 12px var(--glow-primary);
+  --glow-md: 0 0 20px var(--glow-primary);
+  --glow-lg: 0 0 30px var(--glow-primary);
+  --glow-xl: 0 0 40px var(--glow-primary);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+/* Animation Durations */
+:root {
+  --duration-fast: 0.15s;
+  --duration-normal: 0.3s;
+  --duration-slow: 0.6s;
+  --duration-slower: 0.8s;
+}
+
+/* Animation Timing Functions */
+:root {
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* ============================================
+   TRANSITIONS
+   ============================================ */
+
+:root {
+  --transition-fast: all 0.15s ease;
+  --transition-normal: all 0.3s ease;
+  --transition-bounce: all 0.3s var(--ease-bounce);
+  --transition-slow: all 0.6s ease;
+}
+
+/* ============================================
+   Z-INDEX LAYERS
+   ============================================ */
+
+:root {
+  --z-background: 0;
+  --z-content: 1;
+  --z-elevated: 10;
+  --z-overlay: 20;
+  --z-modal: 30;
+  --z-popover: 40;
+  --z-tooltip: 50;
+}
+
+/* ============================================
+   RESET & BASE STYLES
+   ============================================ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: var(--leading-normal);
+  color: var(--text-dark);
+  background: var(--sky-day);
+  transition: background 0.8s ease;
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus Styles cho Accessibility */
+:focus-visible {
+  outline: 4px solid var(--button-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 4px solid var(--button-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Text Utilities */
+.text-display { font-family: var(--font-display); }
+.text-body { font-family: var(--font-body); }
+.text-accent { font-family: var(--font-accent); }
+
+.text-xs { font-size: var(--font-xs); }
+.text-sm { font-size: var(--font-sm); }
+.text-md { font-size: var(--font-md); }
+.text-lg { font-size: var(--font-lg); }
+.text-xl { font-size: var(--font-xl); }
+.text-2xl { font-size: var(--font-2xl); }
+.text-3xl { font-size: var(--font-3xl); }
+.text-4xl { font-size: var(--font-4xl); }
+.text-5xl { font-size: var(--font-5xl); }
+
+.font-light { font-weight: var(--weight-light); }
+.font-normal { font-weight: var(--weight-normal); }
+.font-bold { font-weight: var(--weight-bold); }
+.font-display { font-weight: var(--weight-display); }
+
+/* Color Utilities */
+.text-dark { color: var(--text-dark); }
+.text-light { color: var(--text-light); }
+.text-muted { color: var(--text-muted); }
+
+.bg-glass { background: var(--glass-bg); }
+.border-glass { border-color: var(--glass-border); }
+
+/* Spacing Utilities */
+.p-xs { padding: var(--space-xs); }
+.p-sm { padding: var(--space-sm); }
+.p-md { padding: var(--space-md); }
+.p-lg { padding: var(--space-lg); }
+.p-xl { padding: var(--space-xl); }
+.p-2xl { padding: var(--space-2xl); }
+
+.m-xs { margin: var(--space-xs); }
+.m-sm { margin: var(--space-sm); }
+.m-md { margin: var(--space-md); }
+.m-lg { margin: var(--space-lg); }
+.m-xl { margin: var(--space-xl); }
+.m-2xl { margin: var(--space-2xl); }
+
+/* Border Radius Utilities */
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-full { border-radius: var(--radius-full); }
+.rounded-pill { border-radius: var(--radius-pill); }
+
+/* Shadow Utilities */
+.shadow-xs { box-shadow: var(--shadow-xs); }
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+.shadow-xl { box-shadow: var(--shadow-xl); }
+.shadow-2xl { box-shadow: var(--shadow-2xl); }
+
+/* Display Utilities */
+.hidden { display: none; }
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.grid { display: grid; }
+
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-around { justify-content: space-around; }
+
+.flex-col { flex-direction: column; }
+.flex-row { flex-direction: row; }
+
+.gap-sm { gap: var(--space-sm); }
+.gap-md { gap: var(--space-md); }
+.gap-lg { gap: var(--space-lg); }
+.gap-xl { gap: var(--space-xl); }
+
+/* Position Utilities */
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+
+/* Z-Index Utilities */
+.z-background { z-index: var(--z-background); }
+.z-content { z-index: var(--z-content); }
+.z-elevated { z-index: var(--z-elevated); }
+.z-overlay { z-index: var(--z-overlay); }
+.z-modal { z-index: var(--z-modal); }
+
+/* Overflow Utilities */
+.overflow-hidden { overflow: hidden; }
+.overflow-auto { overflow: auto; }
+
+/* Pointer Events */
+.pointer-none { pointer-events: none; }
+.pointer-auto { pointer-events: auto; }
+
+/* Transition Utilities */
+.transition-fast { transition: var(--transition-fast); }
+.transition-normal { transition: var(--transition-normal); }
+.transition-bounce { transition: var(--transition-bounce); }
+.transition-slow { transition: var(--transition-slow); }
+
+/* Opacity Utilities */
+.opacity-0 { opacity: 0; }
+.opacity-50 { opacity: 0.5; }
+.opacity-100 { opacity: 1; }
+
+/* Transform Utilities */
+.scale-0 { transform: scale(0); }
+.scale-100 { transform: scale(1); }
+.scale-110 { transform: scale(1.1); }
+
+.rotate-0 { transform: rotate(0deg); }
+.translate-y-0 { transform: translateY(0); }

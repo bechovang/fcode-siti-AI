@@ -1,0 +1,609 @@
+/* ============================================
+   COMPONENTS CSS - Reusable UI Components
+   ============================================ */
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+
+/* Base Button Styles */
+button {
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-display);
+  font-weight: var(--weight-display);
+  transition: var(--transition-bounce);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Primary Button */
+.btn-primary {
+  background: linear-gradient(135deg, var(--button-primary), var(--button-primary-dark));
+  border: 4px solid var(--button-primary-border);
+  border-radius: var(--radius-pill);
+  padding: 16px 40px;
+  font-size: var(--font-lg);
+  color: #5D4037;
+  box-shadow: var(--shadow-button-primary), 0 12px 20px rgba(255, 160, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 12px 0 var(--button-primary-border), 0 16px 28px rgba(255, 160, 0, 0.4);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 4px 0 var(--button-primary-border), 0 6px 12px rgba(255, 160, 0, 0.3);
+}
+
+/* Primary Button XL (Extra Large) */
+.btn-primary.btn-xl {
+  padding: 22px 56px;
+  font-size: var(--font-xl);
+  box-shadow: 0 10px 0 var(--button-primary-border), 0 14px 24px rgba(255, 160, 0, 0.35);
+}
+
+.btn-primary.btn-xl:hover:not(:disabled) {
+  box-shadow: 0 14px 0 var(--button-primary-border), 0 18px 32px rgba(255, 160, 0, 0.45);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background: linear-gradient(135deg, var(--button-secondary), var(--button-secondary-dark));
+  border: 4px solid var(--button-secondary-border);
+  border-radius: var(--radius-pill);
+  padding: 14px 32px;
+  font-size: var(--font-md);
+  color: #1B5E20;
+  box-shadow: 0 6px 0 var(--button-secondary-border), 0 10px 16px rgba(56, 142, 60, 0.3);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 9px 0 var(--button-secondary-border), 0 12px 20px rgba(56, 142, 60, 0.4);
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 var(--button-secondary-border), 0 5px 10px rgba(56, 142, 60, 0.25);
+}
+
+/* Accent Button */
+.btn-accent {
+  background: linear-gradient(135deg, var(--button-accent), #FF5252);
+  border: 4px solid #D32F2F;
+  border-radius: var(--radius-pill);
+  padding: 14px 32px;
+  font-size: var(--font-md);
+  color: #FFFFFF;
+  box-shadow: 0 6px 0 #D32F2F, 0 10px 16px rgba(211, 47, 47, 0.3);
+}
+
+.btn-accent:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 9px 0 #D32F2F, 0 12px 20px rgba(211, 47, 47, 0.4);
+}
+
+/* Round Action Buttons (Mic, Send, etc.) */
+.btn-round {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  border: 4px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 6px 0 currentColor, 0 10px 20px var(--shadow-medium);
+  transition: var(--transition-bounce);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-round:hover:not(:disabled) {
+  transform: scale(1.1) rotate(10deg);
+  box-shadow: 0 8px 0 currentColor, 0 12px 24px var(--shadow-strong);
+}
+
+.btn-round:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.btn-round.rec {
+  animation: pulse-rec 1.5s infinite;
+}
+
+@keyframes pulse-rec {
+  0%, 100% { box-shadow: 0 6px 0 currentColor, 0 0 0 0 rgba(255, 82, 82, 0.7); }
+  50% { box-shadow: 0 6px 0 currentColor, 0 0 0 16px rgba(255, 82, 82, 0); }
+}
+
+/* Ghost Button (Transparent) */
+.btn-ghost {
+  background: var(--glass-bg);
+  border: 3px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  padding: 12px 24px;
+  font-size: var(--font-md);
+  color: var(--text-light);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+/* Icon Buttons */
+.btn-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border: 3px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-light);
+  transition: var(--transition-normal);
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+/* ============================================
+   CARDS & CONTAINERS
+   ============================================ */
+
+/* Glass Card (Base) */
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 3px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl) var(--space-2xl);
+  box-shadow: var(--shadow-lg);
+  transition: var(--transition-normal);
+}
+
+/* Question Bubble */
+.question-bubble {
+  background: linear-gradient(135deg, #FFF9C4, #FFF59D);
+  border: 4px solid #FBC02D;
+  border-radius: var(--radius-xl);
+  padding: 32px 48px;
+  position: relative;
+  box-shadow: 0 12px 40px rgba(251, 192, 45, 0.3);
+  text-align: center;
+  max-width: 90%;
+  transition: var(--transition-bounce);
+}
+
+.question-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 20px solid transparent;
+  border-top-color: #FBC02D;
+}
+
+.question-bubble.bounce-in {
+  animation: bounce-in 0.6s var(--ease-bounce);
+}
+
+/* Team Card */
+.team-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2));
+  border: 5px solid var(--team-color, var(--team-a));
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  box-shadow: 0 12px 40px var(--shadow-medium);
+  transition: var(--transition-slow);
+  position: relative;
+  overflow: hidden;
+}
+
+.team-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3), transparent 70%);
+  pointer-events: none;
+}
+
+.team-card:hover {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 20px 60px var(--shadow-strong);
+}
+
+.team-card.winner {
+  background: linear-gradient(135deg, #FFD700, #FFC107);
+  border-color: #FFA000;
+  animation: winner-glow 1.5s infinite alternate;
+}
+
+@keyframes winner-glow {
+  from { box-shadow: 0 12px 40px rgba(255, 215, 0, 0.4); }
+  to { box-shadow: 0 20px 80px rgba(255, 215, 0, 0.7); }
+}
+
+.team-card.finished {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--team-color, var(--team-a)) 22%, transparent),
+    color-mix(in srgb, var(--team-color, var(--team-a)) 10%, transparent)
+  );
+  box-shadow: 0 0 50px color-mix(in srgb, var(--team-color, var(--team-a)) 40%, transparent);
+}
+
+/* Content Card */
+.card-content {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ============================================
+   INPUT FIELDS
+   ============================================ */
+
+/* Playful Input */
+.input-fun {
+  background: rgba(255, 255, 255, 0.9);
+  border: 4px solid #BDBDBD;
+  border-radius: var(--radius-md);
+  padding: 16px 24px;
+  font-family: var(--font-body);
+  font-size: var(--font-lg);
+  color: var(--text-dark);
+  box-shadow: 0 4px 0 #9E9E9E, inset 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: var(--transition-fast);
+  width: 100%;
+}
+
+.input-fun:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 4px 0 var(--button-primary), 0 0 0 4px rgba(255, 217, 61, 0.2);
+  transform: translateY(-2px);
+}
+
+.input-fun::placeholder {
+  color: #9E9E9E;
+  font-style: italic;
+  font-family: var(--font-body);
+}
+
+/* ============================================
+   PROGRESS INDICATORS
+   ============================================ */
+
+/* Progress Bar Container */
+.progress-container {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-md) var(--space-xl);
+  background: var(--glass-bg);
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px solid var(--glass-border);
+}
+
+/* Rainbow Orb Progress */
+.orb {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  border: 4px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 4px 12px rgba(255, 255, 255, 0.3);
+  transition: var(--transition-slow);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.orb.done {
+  background: var(--orb-color, var(--rainbow-1));
+  border-color: #FFF;
+  box-shadow: 0 0 24px var(--orb-color, var(--rainbow-1)),
+              inset 0 0 12px rgba(255, 255, 255, 0.6);
+  transform: scale(1.2);
+  animation: orb-pop 0.6s var(--ease-bounce);
+}
+
+.orb.done::after {
+  content: '⭐';
+  position: absolute;
+  animation: star-spin 2s linear infinite;
+}
+
+.orb.active {
+  border-color: #FFF;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+  animation: orb-pulse 1.5s infinite;
+}
+
+@keyframes orb-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1.2); }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.6); }
+  50% { box-shadow: 0 0 40px rgba(255, 255, 255, 0.9); }
+}
+
+@keyframes star-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Linear Progress Bar */
+.progress-bar {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--rainbow-1), var(--rainbow-3), var(--rainbow-5), var(--rainbow-7));
+  background-size: 200% 100%;
+  border-radius: var(--radius-pill);
+  transition: width 0.6s var(--ease-bounce);
+  animation: rainbow-shimmer 3s linear infinite;
+}
+
+@keyframes rainbow-shimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ============================================
+   BADGES & TAGS
+   ============================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--glass-bg);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.badge-primary {
+  background: linear-gradient(135deg, var(--button-primary), var(--button-primary-dark));
+  border-color: var(--button-primary-border);
+  color: #5D4037;
+}
+
+.badge-success {
+  background: linear-gradient(135deg, var(--button-secondary), var(--button-secondary-dark));
+  border-color: var(--button-secondary-border);
+  color: #1B5E20;
+}
+
+.badge-accent {
+  background: linear-gradient(135deg, var(--button-accent), #FF5252);
+  border-color: #D32F2F;
+  color: #FFFFFF;
+}
+
+/* ============================================
+   OVERLAYS & MODALS
+   ============================================ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xl);
+  padding: var(--space-2xl);
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.modal {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  box-shadow: var(--shadow-2xl);
+  max-width: 90%;
+  max-height: 90vh;
+  overflow: auto;
+  animation: modal-in 0.4s var(--ease-spring);
+}
+
+@keyframes modal-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ============================================
+   DECORATIVE ELEMENTS
+   ============================================ */
+
+/* Cloud Decoration */
+.cloud {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 100px;
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.4);
+  animation: float 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.cloud::before,
+.cloud::after {
+  content: '';
+  position: absolute;
+  background: inherit;
+  border-radius: 50%;
+}
+
+/* Star Decoration */
+.star-decoration {
+  position: absolute;
+  font-size: 24px;
+  animation: sparkle 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Sparkle */
+.sparkle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle, #FFF 0%, transparent 70%);
+  border-radius: 50%;
+  animation: sparkle 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Rainbow Gradient Text */
+.rainbow-text {
+  background: linear-gradient(90deg,
+    var(--rainbow-1), var(--rainbow-2), var(--rainbow-3),
+    var(--rainbow-4), var(--rainbow-5), var(--rainbow-6), var(--rainbow-7)
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: rainbow-shimmer 3s linear infinite;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes bounce-in {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slide-up-bounce {
+  0% { transform: translateY(100px); opacity: 0; }
+  60% { transform: translateY(-20px); opacity: 1; }
+  80% { transform: translateY(10px); }
+  100% { transform: translateY(0); }
+}
+
+/* ============================================
+   UTILITY COMPONENT CLASSES
+   ============================================ */
+
+/* Animation Trigger Classes */
+.bounce-in { animation: bounce-in 0.6s var(--ease-bounce); }
+.float { animation: float 3s ease-in-out infinite; }
+.wiggle { animation: wiggle 0.5s ease-in-out; }
+.pop-in { animation: pop-in 0.4s var(--ease-spring); }
+
+/* Delay Classes */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+
+/* Glass Effect */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Glow Effects */
+.glow-primary {
+  box-shadow: 0 0 20px var(--glow-primary);
+}
+
+.glow-secondary {
+  box-shadow: 0 0 20px var(--glow-secondary);
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px var(--glow-accent);
+}
+
+/* Team Color Modifiers */
+.team-a { --team-color: var(--team-a); }
+.team-b { --team-color: var(--team-b); }
+.team-c { --team-color: var(--team-c); }
+
+/* Rainbow Color Modifiers */
+.rainbow-1 { --orb-color: var(--rainbow-1); }
+.rainbow-2 { --orb-color: var(--rainbow-2); }
+.rainbow-3 { --orb-color: var(--rainbow-3); }
+.rainbow-4 { --orb-color: var(--rainbow-4); }
+.rainbow-5 { --orb-color: var(--rainbow-5); }
+.rainbow-6 { --orb-color: var(--rainbow-6); }
+.rainbow-7 { --orb-color: var(--rainbow-7); }
