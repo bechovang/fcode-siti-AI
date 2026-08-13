@@ -241,9 +241,9 @@
 
   <!-- ANSWER BAR -->
   <div id="answerBar">
-    <input id="answerText" placeholder="Bé nói gì? (test gõ) hoặc nhấn 🎤" autocomplete="off" />
-    <button id="mic" onclick="toggleMic()">🎤 Mic</button>
-    <button id="send" onclick="sendAnswer()">Gửi</button>
+    <input id="answerText" placeholder="Bé nói gì? (test gõ) hoặc nhấn 🎤" autocomplete="off" disabled />
+    <button id="mic" onclick="toggleMic()" disabled>🎤 Mic</button>
+    <button id="send" onclick="sendAnswer()" disabled>Gửi</button>
     <span class="hint">Enter = gửi</span>
   </div>
 
@@ -444,6 +444,9 @@ const ws = new WebSocket((location.protocol==='https:'?'wss':'ws') + '://' + loc
 const introContinueBtn = document.getElementById('introContinue');
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
+  // KHOÁ ô nhập mặc định — chỉ MỞ cho await_answer (KOON đang chờ trả lời).
+  // Mọi message khác (KOON nói intro/ask/feedback/recap...) → khoá + tắt mic.
+  setInputEnabled(m.type === 'await_answer');
   switch(m.type){
     case 'play_audio': playAudio(m.key); break;
     case 'intro_pause':
@@ -693,10 +696,14 @@ function koonMagicOut(){
 function setThinking(on){
   thinkingEl.classList.toggle('show', !!on);
   statusEl.style.visibility = on ? 'hidden' : 'visible';
-  // Khoá ô nhập + mic + nút gửi khi đang chấm đáp án (tránh gửi trùng / nói chồng)
-  document.getElementById('answerText').disabled = !!on;
-  document.getElementById('mic').disabled = !!on;
-  document.getElementById('send').disabled = !!on;
+}
+// Khoá/mở ô nhập + mic + nút gửi. Mặc định KHOÁ — chỉ mở khi nhận await_answer
+// (KOON thực sự chờ trả lời). on=false → tắt mic ngay tránh transcribe giọng KOON.
+function setInputEnabled(on){
+  document.getElementById('answerText').disabled = !on;
+  document.getElementById('mic').disabled = !on;
+  document.getElementById('send').disabled = !on;
+  if(!on) stopSTT();
 }
 function showSubmittedAnswer(text){
   sttHeardEl.textContent = `💬 "${text}"`;
@@ -711,6 +718,7 @@ function sendAnswer(){
   document.getElementById('answerText').value='';
   showSubmittedAnswer(t);
   setThinking(true);
+  setInputEnabled(false);   // khoá ngay sau khi gửi — đang chấm, tránh gửi trùng
 }
 document.getElementById('answerText').addEventListener('keydown', e=>{ if(e.key==='Enter') sendAnswer(); });
 
@@ -784,6 +792,7 @@ function toggleMic(){
         showSubmittedAnswer(text);
         ws.send(JSON.stringify({type:'answer', text, stt:engine}));
         setThinking(true);
+        setInputEnabled(false);   // khoá ngay — đang chấm
       }
     },
     onError:e=> statusEl.textContent='lỗi STT: '+e+(e==='not-allowed'?' (cấp quyền mic cho site)':''),

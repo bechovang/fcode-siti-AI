@@ -74,12 +74,30 @@ def get_tts():
 _ = get_tts()
 
 # ---------- judge + reply ----------
+def _norm_match(s: str) -> str:
+    """Chuẩn hoá để so khớp: lowercase + bỏ dấu tiếng Việt + bỏ hết khoảng trắng.
+    VD: 'con sư tử' / 'Con SU Tu' / 'con sứ tủ' đều -> 'consutu'."""
+    s = (s or "").lower().strip()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if not unicodedata.combining(c))   # bỏ dấu
+    return "".join(s.split())                                   # bỏ khoảng trắng
+
+
 def judge_fuzzy(text: str, ch: dict) -> bool:
-    t = (text or "").strip().lower()
+    """So khớp đáp án dựa trên answer + aliases (bỏ dấu, bỏ khoảng trắng).
+    - Khớp chính xác / bao hàm (cho phép thêm-bớt "con/trái/cái/loài", bỏ dấu, sai chính tả nhẹ).
+    - TIỆT ĐỐI tránh false-positive kiểu "con gà" vs "con sư tử" (chung tiền tố "con")
+      mà partial_ratio ngưỡng 80 trước đây gây ra → chỉ LLM mới được chấp nhận đáp án "gần đúng"."""
+    t = _norm_match(text)
     if not t:
         return False
-    cands = [ch["answer"]] + ch.get("aliases", [])
-    return any(fuzz.partial_ratio(t, c) >= 80 for c in cands)
+    ncs = [_norm_match(c) for c in [ch["answer"]] + ch.get("aliases", [])]
+    ncs = [nc for nc in ncs if nc]
+    for nc in ncs:
+        if t == nc or nc in t or t in nc:
+            return True
+    # Fallback cho lỗi gõ thay thế hiếm gặp: chỉ chấp khi độ tương đồng TOÀN chuỗi rất cao.
+    return any(fuzz.ratio(t, nc) >= 90 for nc in ncs)
 
 
 def _reply_template(ch: dict, attempts: int) -> str:
@@ -128,13 +146,17 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
             "hoặc thiếu một đặc điểm quan trọng thì SAI.\n"
             "2. Nếu ĐÚNG: sinh 1-2 câu khen ngợi + xác nhận đáp án bé nói (chỉ dựa vào đặc điểm đã CÓ SẴN trong "
             "câu đố, không bịa). Ví dụ bé nói \"ghế\": \"Đúng rồi! Ghế cũng có bốn chân và không biết đi! Các bạn giỏi quá!\".\n"
-            "3. Nếu SAI: sinh 1-2 câu đáp lại lễ phép, khích lệ thử lại. QUY TẮC BẮT BUỘC (tránh lộ đáp án cho các đội khác):\n"
+            "3. Nếu SAI: sinh 1-2 câu đáp lại lễ phép, khích lệ thử lại. QUAN TRỌNG: BẮT BUỘC nhắc lại TRỌN VẸN nội dung "
+            "Gợi ý đã cho (lấy nguyên 'Gợi ý' trong phần câu hỏi) để các đội có thêm thông tin đoán tiếp. TUYỆT ĐỐI KHÔNG "
+            "chỉ nói chung chung kiểu 'nghe gợi ý rồi thử lại' mà không đưa ra nội dung gợi ý. QUY TẮC BẮT BUỘC (tránh "
+            "lộ đáp án cho các đội khác):\n"
             "   - CHỈ được dùng thông tin từ câu bé nói và Gợi ý đã cho.\n"
             "   - TUYỆT ĐỐI KHÔNG nhắc tên, không mô tả, không ví dụ, không so sánh với đáp án đúng (kể cả khi bé đoán rất gần).\n"
             "   - KHÔNG đưa thêm đặc điểm MỚI của đáp án đúng (đặc điểm nào chưa có trong câu đố/gợi ý thì cấm nhắc tới).\n"
-            "   Ví dụ bé nói \"cà chua\" (sai): chỉ nói kiểu \"Cà chua là một trái hay ghê, nhưng chưa phải đáp án mình "
-            "tìm đâu! Các bạn nghe gợi ý rồi thử lại nha!\" — KHÔNG được nhắc 'hạt đen', 'vỏ xanh', 'dưa' hay bất kỳ "
-            "đặc điểm của đáp án đúng.\n"
+            "   Ví dụ bé nói \"cà chua\" (sai), gợi ý là \"đó là một loại trái cây mùa hè, vỏ xanh ruột đỏ, căng mọng "
+            "nước\": chỉ nói kiểu \"Cà chua là một trái hay ghê, nhưng chưa phải đáp án mình tìm đâu! Gợi ý cho các "
+            "bạn nè: đó là một loại trái cây mùa hè, vỏ xanh ruột đỏ, căng mọng nước. Các bạn thử lại nha!\" — được "
+            "nhắc lại đúng Gợi ý nhưng KHÔNG được nhắc 'hạt đen', 'dưa' hay bất kỳ đặc điểm nào của đáp án đúng ngoài Gợi ý.\n"
             "Không bịa lý do sai sự thật để bác bỏ. Nếu không chắc đúng/sai, cho là SAI rồi gợi ý thêm.\n"
             "Luôn an toàn, vui vẻ, phù hợp trẻ em; không thô tục, không nhắc chuyện người lớn.\n"
             'Chỉ trả JSON hợp lệ: {"correct": true|false, "reply": "..."}.'
@@ -159,6 +181,10 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
                 # Backstop: LLM vẫn lỡ nhắc đáp án dù prompt cấm → vứt reply, dùng template an toàn.
                 log.info("LLM reply lộ đáp án -> bỏ reply, dùng template an toàn")
                 reply = _reply_template(ch, attempts)
+            # Đảm bảo gợi ý LUÔN được nhắc lại dù LLM quên (đề phòng LLM chỉ nói 'nghe gợi ý rồi thử lại').
+            if ch["hint"].lower() not in reply.lower():
+                log.info("LLM reply thiếu gợi ý -> nối thêm gợi ý")
+                reply = f"{reply} Gợi ý cho các bạn nè: {ch['hint']}."
             return False, reply
         except Exception as e:
             log.warning("LLM judge_and_reply lỗi (%s) -> template", e)
@@ -512,7 +538,8 @@ async def ws_endpoint(ws: WebSocket):
 # ---------- HTTP endpoints ----------
 @app.get("/")
 async def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    # no-store: browser luôn tải index.html mới (tránh chạy bản cũ khi đã sửa frontend)
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/audio/{key}")
