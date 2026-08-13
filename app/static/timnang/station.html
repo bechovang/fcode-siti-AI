@@ -4,10 +4,37 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Trạm — Tìm Nắng</title>
-<!-- CSS Files -->
-<link rel="stylesheet" href="/static/css/variables.css" />
-<link rel="stylesheet" href="/static/css/components.css" />
-<link rel="stylesheet" href="/static/css/game-timnang.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b1020; color: #fff;
+    font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
+  #stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px; padding: 20px; }
+  #teamBadge { font-size: clamp(28px, 5vw, 52px); font-weight: 900; padding: 8px 36px; border-radius: 18px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+  #objectBox { font-size: clamp(22px, 3.5vw, 40px); font-weight: 700; text-align: center;
+    background: rgba(0,0,0,.4); padding: 12px 28px; border-radius: 16px; min-height: 64px;
+    display: flex; align-items: center; justify-content: center; transition: all .3s; }
+  #objectBox.live { border: 3px solid #ffd700; box-shadow: 0 0 30px rgba(255,215,0,.4); }
+  #camWrap { position: relative; width: min(70vw, 60vh); aspect-ratio: 4/3; border-radius: 20px; overflow: hidden;
+    background: #000; box-shadow: 0 12px 40px rgba(0,0,0,.5); border: 4px solid var(--team, #fff); }
+  #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }  /* mirror */
+  #recBtn { font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: 22px 60px; border: none; border-radius: 60px;
+    cursor: pointer; background: linear-gradient(135deg, #ffd700, #ff9800); color: #3a2a00;
+    box-shadow: 0 10px 36px rgba(255,152,0,.45); transition: transform .1s; }
+  #recBtn:hover:not(:disabled) { transform: scale(1.05); }
+  #recBtn:active:not(:disabled) { transform: scale(.96); }
+  #recBtn:disabled { opacity: .5; cursor: wait; }
+  #result { font-size: clamp(20px, 3vw, 32px); font-weight: 700; min-height: 48px; text-align: center; transition: all .3s; }
+  #result.ok { color: #2ecc71; text-shadow: 0 0 20px rgba(46,204,113,.5); }
+  #result.bad { color: #ff6b6b; }
+  #result.wait { color: #ffd700; }
+  #score { position: absolute; top: 18px; right: 22px; font-size: clamp(20px, 3vw, 32px); font-weight: 800;
+    background: rgba(0,0,0,.4); padding: 8px 22px; border-radius: 14px; }
+  #phaseTag { position: absolute; top: 18px; left: 22px; font-size: 13px; opacity: .7; background: rgba(0,0,0,.4);
+    padding: 6px 14px; border-radius: 10px; }
+  #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+</style>
 </head>
 <body>
 <div id="stage">
@@ -22,7 +49,124 @@
 </div>
 <canvas id="snap" hidden></canvas>
 
-<!-- Game JavaScript Module -->
-<script type="module" src="/static/js/game-timnang.js"></script>
+<script>
+const TEAM_COLORS = { A: '#e74c3c', B: '#3498db', C: '#2ecc71' };
+const TEAM_NAMES  = { A: 'Đội A',  B: 'Đội B',  C: 'Đội C' };
+const team = location.pathname.split('/').pop().toUpperCase();
+const teamColor = TEAM_COLORS[team] || '#fff';
+
+document.getElementById('teamBadge').textContent = TEAM_NAMES[team] || ('Đội ' + team);
+document.getElementById('teamBadge').style.background = teamColor;
+document.getElementById('teamBadge').style.color = '#fff';
+document.documentElement.style.setProperty('--team', teamColor);
+
+const cam = document.getElementById('cam');
+const snap = document.getElementById('snap');
+const recBtn = document.getElementById('recBtn');
+const resultEl = document.getElementById('result');
+const objectBox = document.getElementById('objectBox');
+const scoreEl = document.getElementById('score');
+
+// ---- Webcam ----
+navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 640 } }, audio: false })
+  .then(s => { cam.srcObject = s; })
+  .catch(e => { resultEl.className = 'bad'; resultEl.textContent = '⚠️ Không mở được camera: ' + e.message; recBtn.disabled = true; });
+
+// ---- WebSocket ----
+const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/station/' + team);
+ws.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  switch (m.type) {
+    case 'round':
+      objectBox.textContent = '🎯 Hãy tìm: ' + m.object;
+      objectBox.classList.add('live');
+      resultEl.textContent = ' '; resultEl.className = '';
+      break;
+    case 'scoreboard':
+      document.getElementById('phaseTag').textContent = `Trạm ${team} · vòng ${m.round}/${m.rounds} · ${m.phase}`;
+      const me = m.teams.find(t => t.id === team);
+      if (me) scoreEl.textContent = 'Điểm: ' + me.score;
+      break;
+    case 'result':
+      recBtn.disabled = false;
+      resultEl.textContent = m.msg || '';
+      if (m.correct === true) { resultEl.className = 'ok'; playChime('correct'); burstConfetti(teamColor); }
+      else if (m.correct === false) { resultEl.className = 'bad'; playChime('wrong'); }
+      else { resultEl.className = 'wait'; }
+      break;
+    case 'reset':
+      objectBox.textContent = '⏳ Đợi vòng bắt đầu...'; objectBox.classList.remove('live');
+      resultEl.textContent = ' '; resultEl.className = '';
+      clearConfetti();
+      break;
+    case 'game_over':
+      objectBox.textContent = '🏁 Trò chơi kết thúc!';
+      if (m.winner === team) { resultEl.className = 'ok'; resultEl.textContent = '🏆 Đội mình VÔ ĐỊCH!'; burstConfetti(teamColor, 120); }
+      break;
+  }
+};
+
+// ---- Grab frame + send ----
+function recognize() {
+  if (!cam.videoWidth) { resultEl.className = 'bad'; resultEl.textContent = 'Camera chưa sẵn sàng'; return; }
+  const w = 480, h = Math.round(480 * cam.videoHeight / cam.videoWidth);
+  snap.width = w; snap.height = h;
+  const ctx = snap.getContext('2d');
+  ctx.save(); ctx.scale(-1, 1); ctx.translate(-w, 0); ctx.drawImage(cam, 0, 0, w, h); ctx.restore();  // un-mirror
+  const img = snap.toDataURL('image/jpeg', 0.7);
+  resultEl.className = 'wait'; resultEl.textContent = '🤖 Đang nhận diện...';
+  recBtn.disabled = true;
+  ws.send(JSON.stringify({ type: 'recognize', image: img }));
+}
+recBtn.addEventListener('click', recognize);
+// Phím Space cũng nhận diện
+document.addEventListener('keydown', e => { if (e.key === ' ' && !recBtn.disabled) { e.preventDefault(); recognize(); } });
+
+// ---- Chime (Web Audio) ----
+let actx = null;
+function playChime(kind) {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const now = actx.currentTime;
+    const notes = kind === 'correct' ? [523, 659, 784] : [330, 220];
+    notes.forEach((f, i) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.25, now + i * 0.12);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.3);
+      o.connect(g).connect(actx.destination); o.start(now + i * 0.12); o.stop(now + i * 0.12 + 0.3);
+    });
+  } catch (e) {}
+}
+
+// ---- Confetti ----
+const cc = document.getElementById('confetti');
+const cctx = cc.getContext('2d');
+let pieces = [], running = false;
+function resizeCC() { cc.width = window.innerWidth; cc.height = window.innerHeight; }
+window.addEventListener('resize', resizeCC); resizeCC();
+function burstConfetti(color, n = 60) {
+  for (let i = 0; i < n; i++) {
+    pieces.push({ x: window.innerWidth/2 + (Math.random()-.5)*200, y: window.innerHeight*.3,
+      vx: (Math.random()-.5)*12, vy: -Math.random()*14-3, w: 5+Math.random()*8, h: 5+Math.random()*8,
+      color: Math.random()<.5 ? color : '#ffd700', rot: Math.random()*360, rotV: (Math.random()-.5)*8,
+      life: 1, decay: 0.004+Math.random()*0.008 });
+  }
+  if (!running) { running = true; renderCC(); }
+}
+function clearConfetti() { pieces = []; cctx.clearRect(0,0,cc.width,cc.height); }
+function renderCC() {
+  cctx.clearRect(0,0,cc.width,cc.height);
+  pieces = pieces.filter(p => p.life > 0);
+  for (const p of pieces) {
+    p.x += p.vx; p.vy += 0.22; p.y += p.vy; p.rot += p.rotV; p.life -= p.decay;
+    cctx.save(); cctx.translate(p.x, p.y); cctx.rotate(p.rot*Math.PI/180);
+    cctx.globalAlpha = Math.max(0, p.life); cctx.fillStyle = p.color;
+    cctx.fillRect(-p.w/2, -p.h/2, p.w, p.h); cctx.restore();
+  }
+  if (pieces.length) requestAnimationFrame(renderCC); else running = false;
+}
+</script>
 </body>
 </html>
