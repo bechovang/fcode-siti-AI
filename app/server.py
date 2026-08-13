@@ -332,10 +332,10 @@ INTRO_CHUNK_KEYS = [
     ["01_intro_greet", "02_intro_rainbow_q"],   # đoạn 1: chào + "thích ngắm cầu vồng không?"
     ["03_intro_lost_colors"],                    # đoạn 2: "giúp KOON tìm 7 sắc màu... không?"
     ["04_intro_rule"],                           # đoạn 3: "sẵn sàng đồng hành... chưa?"
-    ["05_intro_start"],                          # đoạn 4: "chuyến phiêu lưu bắt đầu thôi!"
 ]
 # Chữ hiện trên nút "nói tiếp" ở góc trái trên (câu operator cần chờ trẻ đồng thanh).
-INTRO_PROMPTS = ["👏 Có!", "👏 Có!", "👏 Sẵn sàng!", "👏 Bắt đầu!"]
+# "05_intro_start" (chuyến phiêu lưu bắt đầu thôi!) đọc LIỀN sau intro, KHÔNG dừng → vào thẳng câu 1.
+INTRO_PROMPTS = ["👏 Có!", "👏 Có!", "👏 Sẵn sàng!"]
 RECAP_PROMPT = "👏 Có, xem điều kỳ diệu!"
 
 OUTRO_RECAP = (
@@ -361,18 +361,25 @@ async def run_flow(s: Session):
         # ---- INTRO (tương tác: KOON nói từng đoạn, dừng sau mỗi đoạn chờ operator bấm nút) ----
         s.phase = "intro"
         await s.state()
+        skipped_intro = False
         for i, keys in enumerate(INTRO_CHUNK_KEYS):
             if s._op == "skip":
                 s._op = None
+                skipped_intro = True
                 break
             for key in keys:
                 await s.play_or_say(key, "")   # pre-cache .wav → phát tức thì (không synth động)
             if s._op == "skip":
                 s._op = None
+                skipped_intro = True
                 break
             s._continue_ready.clear()
             await s.send({"type": "intro_pause", "prompt": INTRO_PROMPTS[i]})
             await s._continue_ready.wait()
+
+        # Câu chuyển tiếp -> câu 1: đọc liền, KHÔNG dừng (nếu không bị skip)
+        if not skipped_intro:
+            await s.play_or_say("05_intro_start", "")
 
         # ---- 7 THỬ THÁCH ----
         for i, ch in enumerate(K.CHALLENGES):
