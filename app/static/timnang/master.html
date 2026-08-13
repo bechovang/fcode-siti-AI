@@ -41,6 +41,16 @@
   #op .danger { background: #c0392b; }
   #op label { font-size: 11px; opacity: .6; text-transform: uppercase; }
 
+  /* Nút nổi bật "Tiếp tục vòng tiếp theo" — chỉ hiện khi cuối vòng (phase=round_end) */
+  #continueNext { position: absolute; left: 50%; top: 64%; transform: translateX(-50%); z-index: 40;
+    display: none; padding: 22px 58px; font-size: clamp(26px, 5vw, 52px); font-weight: 900; cursor: pointer;
+    border: 3px solid rgba(255,255,255,.35); border-radius: 26px; color: #042; letter-spacing: 1px;
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    box-shadow: 0 16px 50px rgba(46,204,113,.55); animation: cnPulse 1.3s ease-in-out infinite; }
+  #continueNext:hover { transform: translateX(-50%) scale(1.06); filter: brightness(1.05); }
+  @keyframes cnPulse { 0%,100%{ box-shadow: 0 0 0 0 rgba(46,204,113,.6), 0 16px 50px rgba(46,204,113,.5) }
+    50%{ box-shadow: 0 0 0 26px rgba(46,204,113,0), 0 16px 50px rgba(46,204,113,.5) } }
+
   #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
   #winnerBanner { position: absolute; inset: 0; z-index: 25; display: none; flex-direction: column; align-items: center;
     justify-content: center; pointer-events: none; }
@@ -74,6 +84,7 @@
   <div id="winnerBanner"><div class="t"></div><div class="sub"></div></div>
   <div id="ranking"></div>
   <canvas id="confetti"></canvas>
+  <button id="continueNext" onclick="op('continue_next')">▶ TIẾP TỤC VÒNG TIẾP THEO</button>
 
   <div id="op">
     <button class="start" onclick="op('start')">▶ Bắt đầu</button>
@@ -184,6 +195,15 @@ ws.onmessage = (e) => {
       else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
       reconcileTeams(m.teams || [], m.team_count || 3);
       if (m.team_count) { const sel = document.getElementById('teamCount'); if (sel) sel.value = m.team_count; }
+      // Nút nổi bật "Tiếp tục vòng tiếp theo" — chỉ hiện khi cuối vòng (round_end).
+      const cBtn = document.getElementById('continueNext');
+      if (m.phase === 'round_end') {
+        const isLast = (m.round >= m.rounds);
+        cBtn.style.display = 'block';
+        cBtn.textContent = isLast ? '🏁 XEM KẾT QUẢ CHUNG CUỘC' : '▶ TIẾP TỤC VÒNG TIẾP THEO';
+      } else {
+        cBtn.style.display = 'none';
+      }
       break;
     case 'play_audio':
       audioQueue.push(m.key);
@@ -215,6 +235,7 @@ ws.onmessage = (e) => {
       winnerBanner.classList.remove('show');
       rankingEl.classList.remove('show');
       objectEl.classList.remove('live');
+      document.getElementById('continueNext').style.display = 'none';
       break;
   }
 };

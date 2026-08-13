@@ -275,9 +275,18 @@ class Game:
         summary = self._round_summary()
         await self.say(summary)
         await self.sync_scoreboard()
-        await asyncio.sleep(2)
-        if self.round_idx + 1 < ROUNDS:
-            await self.start_round(self.round_idx + 1)
+        # KHÔNG tự qua vòng — dừng ở round_end, chờ operator bấm nút nổi bật
+        # "Tiếp tục vòng tiếp theo" (op: continue_next) mới sang vòng kế / kết thúc.
+
+    async def continue_next(self):
+        """Operator bấm nút 'Tiếp tục vòng tiếp theo' khi phase = round_end
+        → qua vòng kế, hoặc kết thúc game nếu vừa xong vòng cuối."""
+        async with self.lock:
+            if self.phase != "round_end":
+                return
+        nxt = self.round_idx + 1
+        if nxt < ROUNDS:
+            await self.start_round(nxt)
         else:
             await self.game_over()
 
@@ -538,15 +547,12 @@ async def ws_master(ws: WebSocket):
                     await game.set_teams(msg.get("count", DEFAULT_TEAMS))
                 elif a == "skip_round":
                     await game.end_round("skip")
+                elif a == "continue_next":
+                    await game.continue_next()
                 elif a == "next_round":
-                    if game.phase == "announce":
-                        game.interrupt_audio()  # bỏ qua intro, start_game tự vào vòng 1
-                    else:
-                        nxt = game.round_idx + 1
-                        if nxt < ROUNDS:
-                            await game.start_round(nxt)
-                        else:
-                            await game.game_over()
+                    # Nút "Vòng kế" (op cũ) — giờ tương đương continue_next: chỉ sang
+                    # vòng kế khi cuối vòng (phase == round_end), không tự qua nữa.
+                    await game.continue_next()
     except WebSocketDisconnect:
         log.info("Master ngắt")
         game.masters.discard(ws)
