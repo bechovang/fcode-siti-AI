@@ -34,6 +34,15 @@
   #phaseTag { position: absolute; top: 18px; left: 22px; font-size: 13px; opacity: .7; background: rgba(0,0,0,.4);
     padding: 6px 14px; border-radius: 10px; }
   #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+
+  /* ============ THINKING MODAL POPUP ============ */
+  .thinking-overlay { position: fixed; inset: 0; z-index: 9990; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; }
+  .thinking-overlay.show { display: flex; opacity: 1; }
+  .thinking-card { background: rgba(20, 30, 55, 0.95); border: 3px solid #ffd700; border-radius: 24px; padding: 24px 44px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.6); animation: pulseCard 1.5s infinite alternate ease-in-out; }
+  @keyframes pulseCard { 0% { transform: scale(0.97); } 100% { transform: scale(1.03); } }
+  .thinking-spinner { font-size: 54px; animation: bounceEmoji 0.9s infinite alternate; }
+  @keyframes bounceEmoji { 0% { transform: translateY(0); } 100% { transform: translateY(-10px); } }
+  .thinking-text { font-size: 26px; font-weight: 800; color: #ffd700; margin-top: 10px; text-shadow: 0 2px 10px rgba(255,215,0,0.4); }
 </style>
 </head>
 <body>
@@ -48,6 +57,14 @@
   <canvas id="confetti"></canvas>
 </div>
 <canvas id="snap" hidden></canvas>
+
+<!-- THINKING MODAL POPUP -->
+<div id="thinkingModal" class="thinking-overlay">
+  <div class="thinking-card">
+    <div class="thinking-spinner">🤖</div>
+    <div class="thinking-text" id="thinkingMsg">AI đang nhận diện...</div>
+  </div>
+</div>
 
 <script>
 const TEAM_COLORS = { A: '#e74c3c', B: '#3498db', C: '#2ecc71' };
@@ -99,6 +116,18 @@ function sendWS(data) {
   }
 }
 
+function showThinking(msg = 'AI đang nhận diện...') {
+  const m = document.getElementById('thinkingModal');
+  const t = document.getElementById('thinkingMsg');
+  if (t) t.textContent = msg;
+  if (m) m.classList.add('show');
+}
+
+function hideThinking() {
+  const m = document.getElementById('thinkingModal');
+  if (m) m.classList.remove('show');
+}
+
 function initWS() {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${protocol}://${location.host}/ws/station/${team}`);
@@ -112,6 +141,7 @@ function initWS() {
     const m = JSON.parse(e.data);
     switch (m.type) {
       case 'round':
+        hideThinking();
         objectBox.textContent = '🎯 Hãy tìm: ' + m.object;
         objectBox.classList.add('live');
         resultEl.textContent = ' '; resultEl.className = '';
@@ -122,6 +152,7 @@ function initWS() {
         if (me) scoreEl.textContent = 'Điểm: ' + me.score;
         break;
       case 'result':
+        hideThinking();
         recBtn.disabled = false;
         resultEl.textContent = m.msg || '';
         if (m.correct === true) { resultEl.className = 'ok'; playChime('correct'); burstConfetti(teamColor); }
@@ -129,11 +160,13 @@ function initWS() {
         else { resultEl.className = 'wait'; }
         break;
       case 'reset':
+        hideThinking();
         objectBox.textContent = '⏳ Đợi vòng bắt đầu...'; objectBox.classList.remove('live');
         resultEl.textContent = ' '; resultEl.className = '';
         clearConfetti();
         break;
       case 'game_over':
+        hideThinking();
         objectBox.textContent = '🏁 Trò chơi kết thúc!';
         if (m.winner === team) { resultEl.className = 'ok'; resultEl.textContent = '🏆 Đội mình VÔ ĐỊCH!'; burstConfetti(teamColor, 120); }
         break;
@@ -162,6 +195,7 @@ function recognize() {
   const img = snap.toDataURL('image/jpeg', 0.7);
   resultEl.className = 'wait'; resultEl.textContent = '🤖 Đang nhận diện...';
   recBtn.disabled = true;
+  showThinking('🤖 AI đang phân tích hình ảnh...');
   sendWS({ type: 'recognize', image: img });
 }
 recBtn.addEventListener('click', recognize);
