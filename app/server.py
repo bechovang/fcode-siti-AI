@@ -303,12 +303,6 @@ async def run_flow(s: Session):
             s.idx = i
             s.phase = "ask"
             await s.state()
-            await s.send({
-                "type": "show_question",
-                "text": ch["question_text"],
-                "color": ch["color"],
-                "hex": ch["hex"],
-            })
 
             attempts = 0
             read_q = True  # đọc câu hỏi lần đầu (và mỗi khi operator bấm replay)
@@ -325,6 +319,13 @@ async def run_flow(s: Session):
                         ch["q"],
                         f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: {ch['question_text']}",
                     )
+                    # Chờ KOON đọc xong câu đố rồi mới hiện chữ lên màn hình
+                    await s.send({
+                        "type": "show_question",
+                        "text": ch["question_text"],
+                        "color": ch["color"],
+                        "hex": ch["hex"],
+                    })
                     read_q = False
                     if s._op == "skip":
                         s._op = None
