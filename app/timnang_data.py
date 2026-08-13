@@ -10,22 +10,22 @@ AUDIO_DIR = os.path.join(APP_DIR, "assets", "audio", "timnang")  # pre-cache TTS
 # 6 vật phẩm cần tìm. aliases không dùng cho vision (vision chấm ảnh) — giữ để
 # tham khảo/hiển thị. vision_prompt = mô tả tiếng Anh cho GPT-4o-mini.
 OBJECTS = [
-    {"id": "ball",  "name": "quả bóng tennis", "vi": "quả bóng tennis",
+    {"id": "ball",  "name": "quả bóng tennis", "vi": "quả bóng tennis", "icon": "🎾",
      "aliases": ["bóng tennis", "quả bóng", "tennis"],
      "vision_prompt": "a tennis ball (small, yellow-green, fuzzy)"},
-    {"id": "lavie", "name": "chai nước Lavie", "vi": "chai nước Lavie",
+    {"id": "lavie", "name": "chai nước Lavie", "vi": "chai nước Lavie", "icon": "🧴",
      "aliases": ["lavie", "nước lavie", "chai nước"],
      "vision_prompt": "a plastic bottle of Lavie mineral water (clear bottle, blue label, Vietnamese brand)"},
-    {"id": "coke",  "name": "chai Coca-Cola", "vi": "chai Coca-Cola",
+    {"id": "coke",  "name": "chai Coca-Cola", "vi": "chai Coca-Cola", "icon": "🥤",
      "aliases": ["coca", "coca-cola", "coke"],
      "vision_prompt": "a Coca-Cola bottle or can (red label, Coca-Cola brand)"},
-    {"id": "spoon", "name": "cái muỗng", "vi": "cái muỗng",
+    {"id": "spoon", "name": "cái muỗng", "vi": "cái muỗng", "icon": "🥄",
      "aliases": ["muỗng", "thìa", "spoon"],
      "vision_prompt": "a spoon (eating utensil)"},
-    {"id": "tote",  "name": "túi Tote", "vi": "túi Tote",
+    {"id": "tote",  "name": "túi Tote", "vi": "túi Tote", "icon": "🛍️",
      "aliases": ["túi tote", "túi vải", "tote"],
      "vision_prompt": "a tote bag (cloth/fabric bag with two handles, flat)"},
-    {"id": "bowl",  "name": "cái tô nhựa", "vi": "cái tô nhựa",
+    {"id": "bowl",  "name": "cái tô nhựa", "vi": "cái tô nhựa", "icon": "🥣",
      "aliases": ["tô", "chén", "bowl"],
      "vision_prompt": "a plastic bowl (round, colorful)"},
 ]

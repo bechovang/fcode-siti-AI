@@ -216,12 +216,11 @@
     <button onclick="op('skip')">Bỏ qua <span class="kbd">S</span></button>
     <button onclick="op('force_correct')">Ép đúng <span class="kbd">F</span></button>
     <button onclick="op('restart')">Chạy lại <span class="kbd">Esc</span></button>
-    <button onclick="toggleDiag()">🧪 Test STT</button>
   </div>
 
   <!-- ANSWER BAR -->
   <div id="answerBar">
-    <input id="answerText" placeholder="Bé nói gì? (test gõ) hoặc nhấn 🎤" autocomplete="off" />
+    <input id="answerText" placeholder="Nhập đáp án hoặc nhấn 🎤..." autocomplete="off" />
     <button id="mic" onclick="toggleMic()">🎤 Mic</button>
     <button id="send" onclick="sendAnswer()">Gửi</button>
     <span class="hint">Enter = gửi</span>

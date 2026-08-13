@@ -258,7 +258,7 @@ class Game:
         for t in self.teams.values():
             t["order"] = None; t["last_rec"] = 0.0
         await self.sync_scoreboard()
-        await self.broadcast_stations({"type": "round", "object": self.object["name"], "vi": self.object["vi"]})
+        await self.broadcast_stations({"type": "round", "object": self.object["name"], "vi": self.object["vi"], "icon": self.object.get("icon", ""), "id": self.object.get("id", "")})
         await self.play_or_say(f"round_{self.object['id']}", D.round_text(idx, self.object))
         # KHÔNG tự timeout — ban tổ chức điều khiển tiến trình bằng nút
         # "Bỏ qua vòng" (skip) / "Vòng kế" (next_round). Vòng cũng tự kết thúc
@@ -477,7 +477,7 @@ async def ws_station(ws: WebSocket, team: str):
     log.info("Station [%s] kết nối", team)
     await game._send(ws, game.scoreboard_msg())
     if game.object:
-        await game._send(ws, {"type": "round", "object": game.object["name"], "vi": game.object["vi"]})
+        await game._send(ws, {"type": "round", "object": game.object["name"], "vi": game.object["vi"], "icon": game.object.get("icon", ""), "id": game.object.get("id", "")})
     try:
         while True:
             msg = json.loads(await ws.receive_text())
