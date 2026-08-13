@@ -15,6 +15,14 @@ import logging
 import tempfile
 import uuid
 
+# Load .env (nếu có python-dotenv) — đảm bảo đọc OPENROUTER_API_KEY, KOON_VOICE,...
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+    load_dotenv()
+except ImportError:
+    pass
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import koon_data as K
 

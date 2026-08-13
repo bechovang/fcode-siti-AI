@@ -18,6 +18,14 @@ import asyncio
 import logging
 import tempfile
 
+# Load .env (nếu có python-dotenv) — đảm bảo đọc OPENROUTER_API_KEY, KOON_VOICE,...
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+    load_dotenv()
+except ImportError:
+    pass
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import timnang_data as D
 from timnang_data import (OBJECTS, TEAMS, ROUNDS, RECOGNIZE_DEBOUNCE,

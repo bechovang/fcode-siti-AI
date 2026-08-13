@@ -149,6 +149,24 @@ python app/scripts/_tn_test.py   # vision + WS flow + recognize round-trip
 
 > Hai trò chạy trên **2 port riêng**: Trò 1 (Cầu Vồng) :**8000**, Trò 2 (Tìm Nắng) :**8001**. Cài đặt chung cho cả hai — chỉ khác lệnh chạy ở bước cuối. Có thể chạy **cả hai cùng lúc** trên cùng máy.
 
+### ⚡ Chạy nhanh (TL;DR)
+
+Nếu đã quen và có sẵn Python 3.10+ / Git — 5 lệnh sau là chạy được (chi tiết từng bước + xử lý lỗi ở dưới):
+
+```bash
+git clone --recurse-submodules <repo-url> && cd fcode-siti-AI   # 1. clone (kèm submodule Kokoro)
+python -m venv .venv                                             # 2. tạo venv
+.venv\Scripts\activate                                           #    activate (Windows) — Linux/mac: source .venv/bin/activate
+pip install -r app/requirements.txt                              # 3. cài dependencies
+copy .env.example .env                                           # 4. tạo .env → mở ra điền OPENROUTER_API_KEY (Bước 8)
+python app/server.py                                             # 5a. Trò 1 (:8000)
+# python app/timnang_master.py                                   #   hoặc 5b. Trò 2 (:8001)
+```
+
+Mở **http://localhost:8000** (Trò 1) hoặc **http://localhost:8001** (Trò 2) bằng Chrome/Edge.
+
+> ⚠️ **Lần đầu tiên** còn phải **cài Kokoro TTS (~2GB)** và **sinh pre-cache giọng** — không làm thì game vẫn chạy nhưng KHÔNG có tiếng (xem **Bước 4 → Bước 7** dưới). Đây là phần tốn thời gian nhất, chỉ làm 1 lần.
+
 ### Yêu cầu hệ thống
 
 | Thành phần | Yêu cầu |
@@ -278,9 +296,29 @@ KOON_GEN_ENGINE=edge python app/scripts/gen_timnang_voice.py
 
 > **Bỏ qua bước này vẫn chạy được** — server sẽ synthesize Kokoro động mỗi câu (chậm hơn, nhưng 2 trò vẫn hoạt động đầy đủ).
 
-### Bước 8: Thiết lập API key (khuyến nghị mạnh)
+### Bước 8: Thiết lập API key & cấu hình `.env` (khuyến nghị mạnh)
 
-Trò 1 cần LLM chấm đáp án; Trò 2 cần vision chấm ảnh. Cả hai dùng chung `OPENROUTER_API_KEY`:
+Trò 1 cần LLM chấm đáp án; Trò 2 cần vision chấm ảnh. Cả hai dùng chung `OPENROUTER_API_KEY`. **Cách dễ nhất là dùng file `.env`** — server (`server.py` / `timnang_master.py`) tự đọc khi khởi động nhờ `python-dotenv`, không phải `set`/`export` mỗi lần mở terminal.
+
+**1) Tạo file `.env` từ mẫu có sẵn trong repo:**
+```bash
+copy .env.example .env          # Windows (cmd)
+Copy-Item .env.example .env     # Windows (PowerShell)
+cp .env.example .env            # Linux / macOS / Git Bash
+```
+
+**2) Mở file `.env`, điền key thật vào dòng `OPENROUTER_API_KEY`:**
+```env
+OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   # ← thay bằng key thật
+```
+Các biến còn lại (`OR_MODEL`, `KOON_VOICE`, `KOON_GEN_ENGINE`…) cứ để mặc định là chạy được ngay; mô tả đầy đủ ở mục **"Toàn bộ biến môi trường"** phía dưới.
+
+> 🔒 **Bảo mật**: file `.env` đã được `.gitignore` nên **không bao giờ** bị đẩy lên GitHub — chỉ file mẫu `.env.example` (giá trị rỗng) mới được commit. Tuyệt đối không commit key thật.
+
+👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/). **Không có key**: Trò 1 fallback fuzzy match (kém chính xác hơn), Trò 2 operator duyệt đúng/sai bằng tay.
+
+<details>
+<summary><b>Cách thay thế: set biến môi trường trực tiếp (nếu không dùng <code>.env</code>)</b></summary>
 
 **Windows (cmd):**
 ```cmd
@@ -295,9 +333,9 @@ $env:OPENROUTER_API_KEY = "sk-or-v1-..."
 export OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-👉 Đăng ký key miễn phí tại [OpenRouter.ai](https://openrouter.ai/). **Không có key**: Trò 1 fallback fuzzy match (kém chính xác hơn), Trò 2 operator duyệt đúng/sai bằng tay.
+> Lưu ý: `set`/`$env:` chỉ có hiệu lực trong terminal hiện tại. Để dùng lâu dài, set trong System Environment Variables (Windows) hoặc `~/.bashrc`/`~/.zshrc` (Linux/mac). Nếu đã có `.env` thì không cần bước này — `.env` được ưu tiên đọc tự động.
 
-> Lưu ý: `set`/`$env:` chỉ có hiệu lực trong terminal hiện tại. Để dùng lâu dài, set trong System Environment Variables (Windows) hoặc `~/.bashrc`/`~/.zshrc` (Linux/mac).
+</details>
 
 ### Bước 9a: Chạy Trò 1 — Cầu Vồng (port 8000)
 
@@ -408,6 +446,8 @@ KOON_GEN_ENGINE=edge python app/scripts/gen_timnang_voice.py  # edge-tts → .mp
 
 ### Toàn bộ biến môi trường
 
+> 💡 Copy file mẫu **`.env.example`** (đã có sẵn trong repo) thành **`.env`** rồi điền giá trị — server đọc tự động. Bảng dưới liệt kê đầy đủ các biến (xem Bước 8 để biết cách tạo `.env`).
+
 | Biến | Mặc định | Bắt buộc | Mô tả |
 |---|---|---|---|
 | `OPENROUTER_API_KEY` | - | ⚠️ Nên có | API key cho LLM (Trò 1) + vision (Trò 2) trên OpenRouter |
@@ -416,6 +456,7 @@ KOON_GEN_ENGINE=edge python app/scripts/gen_timnang_voice.py  # edge-tts → .mp
 | `KOON_GEN_ENGINE` | `kokoro` | ❌ | Engine gen pre-cache: `kokoro` (.wav) hoặc `edge` (.mp3) |
 | `KOON_VOICE_EDGE` | `vi-VN-HoaiMyNeural` | ❌ | Giọng edge-tts (chỉ dùng khi `KOON_GEN_ENGINE=edge`) |
 | `KOON_RATE` | `-5%` | ❌ | Tốc độ edge-tts (chỉ dùng khi `KOON_GEN_ENGINE=edge`) |
+| `CAPCUT_VOICE` | `BV421_vivn_streaming` | ❌ | Giọng CapCut TTS ("Nhỏ Ngọt Ngào" vi-VN) — chỉ cho script `gen_koon_voice_capcut.py` |
 
 ---
 

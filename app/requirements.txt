@@ -1,4 +1,5 @@
 # Trò Cầu Vồng (KOON) — backend
+python-dotenv      # load cấu hình từ file .env
 fastapi
 uvicorn[standard]
 openai            # OpenRouter (OpenAI-compatible) — chấm đáp án
