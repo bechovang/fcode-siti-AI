@@ -14,6 +14,7 @@ import asyncio
 import logging
 import tempfile
 import uuid
+import unicodedata
 
 # Load .env (nếu có python-dotenv) — đảm bảo đọc OPENROUTER_API_KEY, KOON_VOICE,...
 try:
@@ -45,7 +46,7 @@ log.info("TTS temp dir: %s", TTS_DIR)
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OR_BASE = "https://openrouter.ai/api/v1"
 OR_MODEL = os.environ.get("OR_MODEL", "openai/gpt-4o-mini")
-llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY) if OR_KEY else None
+llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY, timeout=5.0) if OR_KEY else None
 log.info("LLM judge: %s", "OpenRouter " + OR_MODEL if llm else "TẮT — dùng fuzzy match")
 
 # ---------- Kokoro Vietnamese TTS (ONNX CPU) ----------
@@ -72,13 +73,36 @@ def get_tts():
 # Khởi tạo TTS từ đầu để load model ngay
 _ = get_tts()
 
+import re
+import unicodedata
+
+
 # ---------- judge + reply ----------
+def remove_accents(text: str) -> str:
+    """Bỏ dấu tiếng Việt và ký tự đặc biệt để matching dự phòng khi mất mạng."""
+    if not text:
+        return ""
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    text = text.replace('đ', 'd').replace('Đ', 'D')
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.strip().lower()
+
+
 def judge_fuzzy(text: str, ch: dict) -> bool:
     t = (text or "").strip().lower()
     if not t:
         return False
+    t_norm = remove_accents(t)
     cands = [ch["answer"]] + ch.get("aliases", [])
-    return any(fuzz.partial_ratio(t, c) >= 80 for c in cands)
+    for c in cands:
+        c_lower = c.strip().lower()
+        c_norm = remove_accents(c_lower)
+        if fuzz.partial_ratio(t, c_lower) >= 80 or fuzz.partial_ratio(t_norm, c_norm) >= 80:
+            return True
+        if c_norm and (c_norm in t_norm or t_norm in c_norm):
+            return True
+    return False
 
 
 def _reply_template(ch: dict, attempts: int) -> str:
@@ -87,6 +111,22 @@ def _reply_template(ch: dict, attempts: int) -> str:
     if attempts <= 0:
         return f"Chưa đúng rồi các bạn ơi! Để mình gợi ý nha: {hint}. Các bạn thử lại xem?"
     return f"Gần được rồi! {hint}. Các bạn nghĩ thêm một chút nha, mình tin các bạn làm được!"
+
+
+def _leaks_answer(reply: str, ch: dict) -> bool:
+    """True nếu reply nhắc đến đáp án/alias (sau khi bỏ dấu + khoảng trắng).
+    Dùng làm backstop: LLM đôi khi vẫn lỡ mồm dù prompt cấm → vứt reply đó."""
+    def norm(s: str) -> str:
+        s = (s or "").lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(c for c in s if not unicodedata.combining(c))   # bỏ dấu
+        return "".join(s.split())                                   # bỏ khoảng trắng
+    nr = norm(reply)
+    for cand in [ch["answer"]] + ch.get("aliases", []):
+        nc = norm(cand)
+        if len(nc) >= 4 and nc in nr:   # >=4 để tránh alias ngắn (dưa/sên/hè) false-positive
+            return True
+    return False
 
 
 def judge_and_reply(text: str, ch: dict, attempts: int = 0):
@@ -102,25 +142,30 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
         return True, ""
     if llm:
         sysp = (
-            "Bạn là KOON, nhân vật AI dẫn trò chơi đố vui cho trẻ em tiếng Việt, đang chơi cùng các bạn nhỏ. Nhiệm vụ:\n"
-            "1. Chấm xem câu bé nói có THỎA MÃN câu đố không. CÂU ĐỐ CÓ THỂ CÓ NHIỀU ĐÁP ÁN HỢP LÝ — bất kỳ đáp án nào "
-            "đúng với mô tả đều ĐÚNG, không chỉ đáp án gợi ý. Ví dụ \"cái gì có 4 chân nhưng không biết đi\" thì "
-            "\"cái bàn\", \"ghế\", \"tủ\", \"giường\" đều ĐÚNG. Đáp án sai logic (không thỏa mãn mô tả) mới là SAI. "
-            "Chấp nhận sai chính tả, không dấu, từ đồng nghĩa, từ lễ phép (dạ/ạ/em).\n"
-            "Lưu ý: đáp án gợi ý là đáp án chính/cổ điển của câu đố. Một đáp án KHÁC chỉ ĐÚNG khi nó RÕ RÀNG thỏa mãn "
-            "toàn bộ các đặc điểm trong mô tả (không chỉ cùng nhóm/tương tự). Nếu chỉ hơi giống hoặc thiếu một đặc điểm "
-            "quan trọng → SAI. Ví dụ \"chúa tể rừng xanh\" → sư tử ĐÚNG, còn hổ/beo là SAI (không phải chúa tể rừng xanh).\n"
-            "2. Nếu ĐÚNG: sinh 1-2 câu khen ngợi + XÁC NHẬN đáp án bé nói (đúng sự thật, động theo câu bé nói). "
-            "Ví dụ bé nói \"ghế\": \"Đúng rồi! Ghế cũng có bốn chân và không biết đi! Các bạn giỏi quá!\". "
-            "Không cần khớp đáp án gợi ý.\n"
-            "3. Nếu SAI: sinh 1-2 câu đáp lại hội thoại, lễ phép, khích lệ thử lại — dựa câu bé nói và gợi ý. "
-            "KHÔNG tiết lộ đáp án. TUYỆT ĐỐI KHÔNG bịa ra lý do sai sự thật để bác bỏ (ví dụ không được nói "
-            "\"ghế không có chân\" khi ghế có chân). Nếu không chắc bé nói đúng hay sai, hãy cho là SAI rồi gợi ý thêm.\n"
+            "Bạn là KOON, nhân vật AI dẫn trò chơi đố vui cho trẻ em tiếng Việt. Nhiệm vụ:\n"
+            "1. Chấm xem câu bé nói có THỎA MÃN mô tả câu đố không. Câu đố có thể có nhiều đáp án hợp lý — "
+            "bất kỳ đáp án nào đúng với mô tả đều ĐÚNG. Ví dụ \"cái gì có 4 chân nhưng không biết đi\" thì "
+            "\"cái bàn\", \"ghế\", \"tủ\", \"giường\" đều ĐÚNG. Đáp án không thỏa mãn mô tả mới là SAI. "
+            "Chấp nhận sai chính tả, không dấu, từ đồng nghĩa, từ lễ phép (dạ/ạ/em). "
+            "Một đáp án chỉ ĐÚNG khi RÕ RÀNG thỏa mãn TOÀN BỘ các đặc điểm trong mô tả; nếu chỉ hơi giống "
+            "hoặc thiếu một đặc điểm quan trọng thì SAI.\n"
+            "2. Nếu ĐÚNG: sinh 1-2 câu khen ngợi + xác nhận đáp án bé nói (chỉ dựa vào đặc điểm đã CÓ SẴN trong "
+            "câu đố, không bịa). Ví dụ bé nói \"ghế\": \"Đúng rồi! Ghế cũng có bốn chân và không biết đi! Các bạn giỏi quá!\".\n"
+            "3. Nếu SAI: sinh 1-2 câu đáp lại lễ phép, khích lệ thử lại. QUY TẮC BẮT BUỘC (tránh lộ đáp án cho các đội khác):\n"
+            "   - CHỈ được dùng thông tin từ câu bé nói và Gợi ý đã cho.\n"
+            "   - TUYỆT ĐỐI KHÔNG nhắc tên, không mô tả, không ví dụ, không so sánh với đáp án đúng (kể cả khi bé đoán rất gần).\n"
+            "   - KHÔNG đưa thêm đặc điểm MỚI của đáp án đúng (đặc điểm nào chưa có trong câu đố/gợi ý thì cấm nhắc tới).\n"
+            "   Ví dụ bé nói \"cà chua\" (sai): chỉ nói kiểu \"Cà chua là một trái hay ghê, nhưng chưa phải đáp án mình "
+            "tìm đâu! Các bạn nghe gợi ý rồi thử lại nha!\" — KHÔNG được nhắc 'hạt đen', 'vỏ xanh', 'dưa' hay bất kỳ "
+            "đặc điểm của đáp án đúng.\n"
+            "Không bịa lý do sai sự thật để bác bỏ. Nếu không chắc đúng/sai, cho là SAI rồi gợi ý thêm.\n"
             "Luôn an toàn, vui vẻ, phù hợp trẻ em; không thô tục, không nhắc chuyện người lớn.\n"
             'Chỉ trả JSON hợp lệ: {"correct": true|false, "reply": "..."}.'
         )
-        usrp = (f"Câu đố: \"{ch['question_text']}\". Đáp án gợi ý (chỉ tham khảo): \"{ch['answer']}\". "
-                f"Gợi ý: \"{ch['hint']}\". Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
+        # KHÔNG đưa đáp án vào prompt — tránh LLM lỡ mồm nhắc tên đáp án trong phản hồi SAI.
+        usrp = (f"Câu đố: \"{ch['question_text']}\". "
+                f"Gợi ý (được phép dùng trong phản hồi): \"{ch['hint']}\". "
+                f"Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
         try:
             r = llm.chat.completions.create(
                 model=OR_MODEL,
@@ -132,7 +177,12 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
             reply = (data.get("reply") or "").strip()
             if correct:
                 return True, reply or "Đúng rồi! Các bạn giỏi quá!"
-            return False, reply or _reply_template(ch, attempts)
+            reply = reply or _reply_template(ch, attempts)
+            if _leaks_answer(reply, ch):
+                # Backstop: LLM vẫn lỡ nhắc đáp án dù prompt cấm → vứt reply, dùng template an toàn.
+                log.info("LLM reply lộ đáp án -> bỏ reply, dùng template an toàn")
+                reply = _reply_template(ch, attempts)
+            return False, reply
         except Exception as e:
             log.warning("LLM judge_and_reply lỗi (%s) -> template", e)
 
@@ -211,7 +261,9 @@ class Session:
         """Phát text qua Kokoro TTS (sinh động, WAV), chờ kết thúc."""
         tts = get_tts()
         if not tts:
-            log.warning("TTS không có — bỏ qua: '%s'", text[:50])
+            delay = max(1.5, min(8.0, len(text) * 0.07))
+            log.warning("TTS không có — giả lập thời gian đọc %.1fs: '%s'", delay, text[:50])
+            await asyncio.sleep(delay)
             return
 
         # Sinh audio trong thread riêng để không block event loop
@@ -303,12 +355,6 @@ async def run_flow(s: Session):
             s.idx = i
             s.phase = "ask"
             await s.state()
-            await s.send({
-                "type": "show_question",
-                "text": ch["question_text"],
-                "color": ch["color"],
-                "hex": ch["hex"],
-            })
 
             attempts = 0
             read_q = True  # đọc câu hỏi lần đầu (và mỗi khi operator bấm replay)
@@ -325,6 +371,13 @@ async def run_flow(s: Session):
                         ch["q"],
                         f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: {ch['question_text']}",
                     )
+                    # Chờ KOON đọc xong câu đố rồi mới hiện chữ lên màn hình
+                    await s.send({
+                        "type": "show_question",
+                        "text": ch["question_text"],
+                        "color": ch["color"],
+                        "hex": ch["hex"],
+                    })
                     read_q = False
                     if s._op == "skip":
                         s._op = None
@@ -351,7 +404,7 @@ async def run_flow(s: Session):
                     correct = True
                     reply = ""
                 else:
-                    correct, reply = judge_and_reply(ans, ch, attempts)
+                    correct, reply = await asyncio.to_thread(judge_and_reply, ans, ch, attempts)
                 attempts += 1
 
                 log.info("Thử thách %d (lần %d): '%s' -> %s", ch["n"], attempts, ans, "ĐÚNG" if correct else "SAI")

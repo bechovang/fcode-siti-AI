@@ -1,12 +1,12 @@
 """Trò 2 — Tìm Nắng Cùng AI: MASTER (FastAPI + WebSocket + Vision + TTS).
 
-Kiến trúc: 1 máy master (màn LED + loa sân khấu) + 3 trạm (tab browser trên laptop mỗi đội).
+Kiến trúc: 1 máy master (màn LED + loa sân khấu) + N trạm (2-6 đội, tab browser trên laptop mỗi đội).
 - Trạm: webcam getUserMedia + nút "NHẬN DIỆN" → grab frame base64 → WS master.
 - Master: vision GPT-4o-mini (OpenRouter) chấm đúng/sai + Kokoro TTS công bố + bảng điểm
-  thời gian thực + luồng 6 vòng (điểm 3-2-1 theo thứ tự về đích).
+  thời gian thực + luồng 6 vòng (điểm N..1 theo thứ tự về đích, N = số đội).
 
 Chạy:  python app/timnang_master.py   (port 8001 — tách khỏi Trò 1 :8000)
-Stations mở:  http://<master-ip>:8001/station/A   /B   /C
+Stations mở:  http://<master-ip>:8001/station/A   /B   ...   (tùy số đội)
 Scoreboard:   http://localhost:8001/
 """
 import os
@@ -29,7 +29,8 @@ except ImportError:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import timnang_data as D
 from timnang_data import (OBJECTS, TEAMS, ROUNDS, RECOGNIZE_DEBOUNCE,
-                          SCORE_BY_ORDER, ORDER_WORD, AUDIO_DIR, num_vi)
+                          ORDER_WORD, AUDIO_DIR, num_vi,
+                          MIN_TEAMS, MAX_TEAMS, DEFAULT_TEAMS)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
@@ -48,7 +49,7 @@ TTS_DIR = tempfile.mkdtemp(prefix="timnang_tts_")
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OR_BASE = "https://openrouter.ai/api/v1"
 OR_MODEL = os.environ.get("OR_MODEL", "openai/gpt-4o-mini")
-llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY) if OR_KEY else None
+llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY, timeout=5.0) if OR_KEY else None
 log.info("Vision/LLM: %s", ("OpenRouter " + OR_MODEL) if llm else "TẮT — operator duyệt tay")
 
 # ---------- Kokoro TTS (đồng bộ init như server.py) ----------
@@ -114,9 +115,10 @@ class Game:
         self.phase = "idle"          # idle | announce | playing | round_end | game_over
         self.round_idx = -1
         self.object = None
+        self.team_count = DEFAULT_TEAMS
         self.teams = {
             t["id"]: {"name": t["name"], "color": t["color"], "score": 0, "order": None, "last_rec": 0.0}
-            for t in TEAMS
+            for t in TEAMS[:self.team_count]
         }
         self.stations: dict[str, WebSocket] = {}   # team_id -> ws
         self.masters: set[WebSocket] = set()
@@ -172,6 +174,7 @@ class Game:
         return {
             "type": "scoreboard",
             "phase": self.phase,
+            "team_count": self.team_count,
             "round": self.round_idx + 1 if self.round_idx >= 0 else 0,
             "rounds": ROUNDS,
             "object": self.object["name"] if self.object else None,
@@ -238,17 +241,11 @@ class Game:
                 t["score"] = 0; t["order"] = None
             self.round_idx = -1
             self.phase = "announce"
-        await self.broadcast_masters({"type": "stop_audio"})  # dừng TTS cũ trước khi vào intro
+        await self.broadcast_masters({"type": "stop_audio"})  # dừng TTS cũ (nếu còn)
         self._audio_done.set()
         await self.broadcast_all({"type": "reset"})
         await self.sync_scoreboard()
-        # CHỜ intro phát trọn vẹn rồi mới vào vòng 1 — tránh thông báo vòng 1 đè lên
-        # intro (master chỉ có 1 thẻ <audio>, set src mới = cắt audio đang phát).
-        await self.play_or_say("intro", D.INTRO_TEXT, wait=True)
-        async with self.lock:
-            if self.phase != "announce":
-                return  # operator can thiệp giữa intro (restart) → không tự vào vòng
-        await asyncio.sleep(0.3)
+        # Bỏ intro "Xin chào các bạn nhỏ..." — MC tự đọc. Bấm Bắt đầu → vào vòng 1 luôn.
         await self.start_round(0)
 
     async def start_round(self, idx):
@@ -318,6 +315,10 @@ class Game:
         if self.phase != "playing" or not self.object:
             await self._send_station(team, {"type": "result", "correct": False, "msg": "Chờ vòng bắt đầu nhé!"})
             return
+        if team not in self.teams:
+            await self._send_station(team, {"type": "result", "correct": None,
+                                            "msg": "Đội chưa được bật — nhờ cô chú chọn số đội."})
+            return
         async with self.lock:
             t = self.teams[team]
             now = time.time()
@@ -357,7 +358,7 @@ class Game:
             # đúng → xếp thứ tự
             order = sum(1 for tt in self.teams.values() if tt["order"] is not None) + 1
             t["order"] = order
-            pts = SCORE_BY_ORDER[order - 1] if order <= len(SCORE_BY_ORDER) else 0
+            pts = max(1, self.team_count - order + 1)   # N đội: nhất +N ... chót +1
             t["score"] += pts
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
                                         "points": pts, "msg": f"Đúng rồi! Về {ORDER_WORD.get(order, order)}! Cộng {pts} điểm!"})
@@ -384,7 +385,7 @@ class Game:
                 return
             order = sum(1 for tt in self.teams.values() if tt["order"] is not None) + 1
             t["order"] = order
-            pts = SCORE_BY_ORDER[order - 1] if order <= len(SCORE_BY_ORDER) else 0
+            pts = max(1, self.team_count - order + 1)   # N đội: nhất +N ... chót +1
             t["score"] += pts
         log.info("Operator force_accept %s -> order %d (+%d)", team, order, pts)
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
@@ -400,6 +401,23 @@ class Game:
         async with self.lock:
             self.teams[team]["score"] += delta
         await self.sync_scoreboard()
+
+    async def set_teams(self, n):
+        """Operator chọn số đội (2-6) trên web. Reset game về idle + dựng lại self.teams."""
+        n = max(MIN_TEAMS, min(MAX_TEAMS, int(n)))
+        async with self.lock:
+            self.team_count = n
+            self.phase = "idle"
+            self.round_idx = -1
+            self.object = None
+            self.teams = {
+                t["id"]: {"name": t["name"], "color": t["color"], "score": 0, "order": None, "last_rec": 0.0}
+                for t in TEAMS[:n]
+            }
+        self.interrupt_audio()
+        await self.broadcast_all({"type": "reset"})
+        await self.sync_scoreboard()
+        log.info("set_teams -> %d đội: %s", n, list(self.teams))
 
     async def reset(self):
         self.phase = "idle"
@@ -460,7 +478,8 @@ async def health():
         "tts_voice": os.environ.get("KOON_VOICE", "mai_linh"),
         "vision": bool(llm),
         "vision_model": OR_MODEL if llm else None,
-        "teams": [t["id"] for t in TEAMS],
+        "teams": list(game.teams),
+        "team_count": game.team_count,
         "objects": len(OBJECTS),
         "rounds": ROUNDS,
     }
@@ -515,6 +534,8 @@ async def ws_master(ws: WebSocket):
                     await game.force_accept(msg.get("team"))
                 elif a == "add_point":
                     await game.add_point(msg.get("team"), msg.get("delta", 1))
+                elif a == "set_teams":
+                    await game.set_teams(msg.get("count", DEFAULT_TEAMS))
                 elif a == "skip_round":
                     await game.end_round("skip")
                 elif a == "next_round":

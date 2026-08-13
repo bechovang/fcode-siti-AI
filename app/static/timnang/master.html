@@ -33,6 +33,9 @@
   #op button { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px; padding: 8px 14px;
     font-size: 14px; cursor: pointer; font-weight: 600; }
   #op button:hover { background: rgba(255,255,255,.3); }
+  #op select { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  #op select option { color: #000; }
   #op .team-btn { border-left: 4px solid var(--c); }
   #op .start { background: linear-gradient(135deg, #2ecc71, #27ae60); color: #042; }
   #op .danger { background: #c0392b; }
@@ -77,6 +80,12 @@
     <button class="danger" onclick="op('restart')">↻ Chạy lại</button>
     <button onclick="op('skip_round')">⏭ Bỏ qua vòng</button>
     <button onclick="op('next_round')">⏭ Vòng kế</button>
+    <div class="group"><label>Số đội</label>
+      <select id="teamCount" onchange="setTeams(this.value)">
+        <option value="2">2</option><option value="3" selected>3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+      </select>
+    </div>
     <div class="group" id="teamOps"></div>
   </div>
 </div>
@@ -84,14 +93,12 @@
 <audio id="player" preload="auto"></audio>
 
 <script>
-const TEAMS = [
-  { id: 'A', name: 'Đội A', color: '#e74c3c' },
-  { id: 'B', name: 'Đội B', color: '#3498db' },
-  { id: 'C', name: 'Đội C', color: '#2ecc71' },
-];
-const ORDER_WORD = { 1: '🥇 Nhất', 2: '🥈 Nhì', 3: '🥉 Ba' };
+const TEAM_COLORS = { A:'#e74c3c', B:'#3498db', C:'#2ecc71', D:'#9b59b6', E:'#e67e22', F:'#1abc9c' };
+const MEDALS = { 1:'🥇', 2:'🥈', 3:'🥉' };
+const ORDER_WORD = { 1:'nhất', 2:'nhì', 3:'ba', 4:'tư', 5:'năm', 6:'sáu' };
 
 const board = document.getElementById('board');
+let renderedTeams = [];   // ids đang render — để reconcile khi số đội đổi
 const objectEl = document.getElementById('object');
 const roundTag = document.getElementById('roundTag');
 const player = document.getElementById('player');
@@ -111,22 +118,40 @@ function showRanking(ranking) {
   rankingEl.classList.add('show');
 }
 
-// Render team cards + operator buttons
-TEAMS.forEach(t => {
-  const card = document.createElement('div');
-  card.className = 'team'; card.id = 'team-' + t.id;
-  card.style.setProperty('--c', t.color);
-  card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
-  board.appendChild(card);
-
-  const g = document.getElementById('teamOps');
-  const wrap = document.createElement('div'); wrap.className = 'group';
-  wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
-    <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
-    <button onclick="op('add_point','${t.id}',1)">+1</button>
-    <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
-  g.appendChild(wrap);
-});
+// Render ĐỘNG team cards + nút operator theo scoreboard (hỗ trợ 2-6 đội).
+function orderLabel(order, teamCount) {
+  if (!order) return '';
+  const medal = MEDALS[order] ? (MEDALS[order] + ' ' + ORDER_WORD[order]) : ('#' + order);
+  const pts = Math.max(1, teamCount - order + 1);
+  return medal + ' · +' + pts;
+}
+function reconcileTeams(teams, teamCount) {
+  const ids = teams.map(t => t.id);
+  const same = ids.length === renderedTeams.length && ids.every((id, i) => id === renderedTeams[i]);
+  if (!same) {
+    board.innerHTML = '';
+    const ops = document.getElementById('teamOps'); ops.innerHTML = '';
+    for (const t of teams) {
+      const card = document.createElement('div');
+      card.className = 'team'; card.id = 'team-' + t.id;
+      card.style.setProperty('--c', t.color);
+      card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
+      board.appendChild(card);
+      const wrap = document.createElement('div'); wrap.className = 'group';
+      wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
+        <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
+        <button onclick="op('add_point','${t.id}',1)">+1</button>
+        <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
+      ops.appendChild(wrap);
+    }
+    renderedTeams = ids;
+  }
+  for (const t of teams) {
+    const sEl = document.getElementById('score-' + t.id); if (sEl) sEl.textContent = t.score;
+    const oEl = document.getElementById('order-' + t.id); if (oEl) oEl.textContent = orderLabel(t.order, teamCount);
+    const card = document.getElementById('team-' + t.id); if (card) card.classList.toggle('finished', !!t.order);
+  }
+}
 
 const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/master');
 // Báo server khi phát xong (server chờ intro phát trọn vẹn trước khi vào vòng 1).
@@ -140,13 +165,8 @@ ws.onmessage = (e) => {
       roundTag.textContent = `vòng ${m.round}/${m.rounds} · ${m.phase}`;
       if (m.object) { objectEl.textContent = '🎯 ' + m.object; objectEl.classList.toggle('live', m.phase === 'playing'); }
       else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
-      m.teams.forEach(t => {
-        document.getElementById('score-' + t.id).textContent = t.score;
-        const orderEl = document.getElementById('order-' + t.id);
-        orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + ([3,2,1][t.order-1]||0) : '';
-        const card = document.getElementById('team-' + t.id);
-        card.classList.toggle('finished', !!t.order);
-      });
+      reconcileTeams(m.teams || [], m.team_count || 3);
+      if (m.team_count) { const sel = document.getElementById('teamCount'); if (sel) sel.value = m.team_count; }
       break;
     case 'play_audio':
       player.src = '/audio/' + m.key;
@@ -158,14 +178,15 @@ ws.onmessage = (e) => {
       break;
     case 'game_over':
       if (m.ranking) showRanking(m.ranking);
-      const win = TEAMS.find(t => t.id === m.winner);
-      if (win) {
-        document.getElementById('team-' + win.id).classList.add('winner');
+      const winColor = TEAM_COLORS[m.winner] || '#ffd700';
+      if (m.winner) {
+        const winCard = document.getElementById('team-' + m.winner);
+        if (winCard) winCard.classList.add('winner');
         winnerBanner.querySelector('.t').textContent = '🏆 ' + m.winner_name + ' VÔ ĐỊCH!';
-        winnerBanner.querySelector('.t').style.color = win.color;
+        winnerBanner.querySelector('.t').style.color = winColor;
         winnerBanner.querySelector('.sub').textContent = 'Cảm ơn tất cả các đội!';
         winnerBanner.classList.add('show');
-        burstConfetti(win.color, 180);
+        burstConfetti(winColor, 180);
         playFanfare();
         setTimeout(() => winnerBanner.classList.remove('show'), 6000);
       }
@@ -184,6 +205,9 @@ function op(action, team, delta) {
   if (team) msg.team = team;
   if (delta !== undefined) msg.delta = delta;
   ws.send(JSON.stringify(msg));
+}
+function setTeams(n) {
+  ws.send(JSON.stringify({ type: 'op', action: 'set_teams', count: Number(n) }));
 }
 // Phím tắt: Enter = start, Esc = restart
 document.addEventListener('keydown', e => {
