@@ -21,7 +21,7 @@ CHALLENGES = [
      "hint": "đó là một loại trái cây mùa hè, vỏ xanh ruột đỏ, căng mọng nước"},
     {"n": 2, "color": "Cam", "hex": "#e67e22", "q": "q2_question", "right": "q2_right", "wrong": "q2_wrong",
      "question_text": "Cái gì có 4 chân nhưng không biết đi?",
-     "answer": "cái bàn", "aliases": ["bàn", "cai ban"],
+     "answer": "cái bàn", "aliases": ["bàn", "cai ban", "ghế", "giường", "tủ"],
      "hint": "đồ vật có bốn chân, các bạn ngồi học cùng nó mỗi ngày"},
     {"n": 3, "color": "Vàng", "hex": "#f1c40f", "q": "q3_question", "right": "q3_right", "wrong": "q3_wrong",
      "question_text": "Loài vật nào được mệnh danh là Chúa tể rừng xanh?",
