@@ -31,7 +31,6 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
-from rapidfuzz import fuzz
 import soundfile as sf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -83,21 +82,35 @@ def _norm_match(s: str) -> str:
     return "".join(s.split())                                   # bỏ khoảng trắng
 
 
+# Các từ đếm/loại từ đứng TRƯỚC danh từ (con/trái/cái/loài/quả...) cho phép lướt qua,
+# nhưng PHẦN CÒN LẠI phải khớp chính xác đáp án -> không sinh false-positive.
+def _answer_cores(t: str) -> set:
+    """Từ input (đã chuẩn hoá, không dấu/không trắng), sinh các ứng viên "lõi đáp án":
+    bỏ hết từ đếm/loại từ đứng trước (con/trái/cái/loài/quả/bông/ông/bà/em...) và
+    bỏ 'con' đuôi (sư tử con). VD 'consutu'->{'consutu','sutu'}; 'duahay'->{'duahay'}."""
+    ARTICLES = ("con", "cai", "trai", "qua", "loai", "bong", "ong", "ba", "em", "be", "chu", "co", "anh", "chi", "cu")
+    cores = {t}
+    for a in ARTICLES:
+        if t.startswith(a):
+            cores.add(t[len(a):])
+    if t.endswith("con"):            # 'sư tử con' = sư tử non, vẫn là sư tử
+        cores.add(t[:-3])
+    cores.discard("")
+    return cores
+
+
 def judge_fuzzy(text: str, ch: dict) -> bool:
-    """So khớp đáp án dựa trên answer + aliases (bỏ dấu, bỏ khoảng trắng).
-    - Khớp chính xác / bao hàm (cho phép thêm-bớt "con/trái/cái/loài", bỏ dấu, sai chính tả nhẹ).
-    - TIỆT ĐỐI tránh false-positive kiểu "con gà" vs "con sư tử" (chung tiền tố "con")
-      mà partial_ratio ngưỡng 80 trước đây gây ra → chỉ LLM mới được chấp nhận đáp án "gần đúng"."""
+    """So khớp đáp án CHẶT — KHÔNG dùng fuzzy nữa.
+    Chỉ ĐÚNG khi "lõi" của input (bỏ dấu, bỏ khoảng trắng, lướt từ đếm) KHỚP CHÍNH XÁC
+    một đáp án/alias đầy đủ. Mọi thứ khác trả SAI (để LLM xử lý đáp án thay thế hợp lý).
+    Bỏ partial_ratio/ratio (containment) trước đây sinh false-positive: 'con gà'=sư tử,
+    'con chó'=sư tử, 'dua hay'=dưa hấu (vì 'dua' là alias 3 ký tự nằm lọt trong chuỗi)."""
     t = _norm_match(text)
     if not t:
         return False
-    ncs = [_norm_match(c) for c in [ch["answer"]] + ch.get("aliases", [])]
-    ncs = [nc for nc in ncs if nc]
-    for nc in ncs:
-        if t == nc or nc in t or t in nc:
-            return True
-    # Fallback cho lỗi gõ thay thế hiếm gặp: chỉ chấp khi độ tương đồng TOÀN chuỗi rất cao.
-    return any(fuzz.ratio(t, nc) >= 90 for nc in ncs)
+    ncs = set(_norm_match(c) for c in [ch["answer"]] + ch.get("aliases", []))
+    ncs.discard("")
+    return bool(ncs.intersection(_answer_cores(t)))
 
 
 def _reply_template(ch: dict, attempts: int) -> str:
