@@ -54,6 +54,18 @@
     border: 1px solid rgba(255,255,255,.12); }
   #sttHeard.show { opacity: 1; }
 
+  /* Thinking / loading indicator (khi KOON đang chấm đáp án) */
+  #thinking { position: absolute; left: 50%; transform: translateX(-50%); bottom: 100px; z-index: 4;
+    display: none; align-items: center; gap: 5px; font-size: 17px;
+    background: rgba(0,0,0,.5); padding: 8px 20px; border-radius: 14px; border: 1px solid rgba(255,215,0,.25); }
+  #thinking.show { display: flex; }
+  #thinking .dot { width: 9px; height: 9px; border-radius: 50%; background: #ffd700;
+    animation: thinkBounce 1.2s infinite ease-in-out; }
+  #thinking .dot:nth-child(2){ animation-delay: .18s; background: #2ecc71; }
+  #thinking .dot:nth-child(3){ animation-delay: .36s; background: #3498db; }
+  #thinking .t { margin-left: 10px; opacity: .9; }
+  @keyframes thinkBounce { 0%,80%,100%{ transform: translateY(0); opacity:.45 } 40%{ transform: translateY(-9px); opacity:1 } }
+
   /* ============ CỘT PHẢI (cầu vồng + KOON) ============ */
   #rightCol { position: absolute; top: 0; left: 48vw; width: 52vw; height: 100vh; z-index: 2; overflow: hidden; }
 
@@ -89,6 +101,7 @@
   #mic { background: #f1c40f; color: #333; }
   #mic.rec { background: #e74c3c; color: #fff; }
   .hint { font-size: 12px; opacity: .5; }
+  #answerText:disabled, #answerBar button:disabled { opacity: .4; cursor: not-allowed; }
 
   /* ============ START OVERLAY ============ */
   #startOverlay { position: absolute; inset: 0; z-index: 30; background: radial-gradient(circle at 50% 40%, #1b2a4a, #070b18);
@@ -189,6 +202,7 @@
     <div id="phaseTag">—</div>
     <div id="question"></div>
     <div id="status"></div>
+    <div id="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">KOON đang nghĩ…</span></div>
     <div id="sttHeard"></div>
   </div>
 
@@ -260,6 +274,7 @@ const player = document.getElementById('player');
 const koon = document.getElementById('koon');
 const qEl = document.getElementById('question');
 const statusEl = document.getElementById('status');
+const thinkingEl = document.getElementById('thinking');
 const phaseTag = document.getElementById('phaseTag');
 const sttHeardEl = document.getElementById('sttHeard');
 const finaleEl = document.getElementById('finaleText');
@@ -393,17 +408,17 @@ function playChime(kind){
         osc.stop(now + i * 0.15 + 0.45);
       });
     } else if(kind === 'wrong'){
-      // 2 nốt đi xuống cho âm thanh sai
+      // 2 nốt đi xuống cho âm thanh sai (to, rõ ràng)
       [392.00, 261.63].forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.15, now + i * 0.2);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.2 + 0.25);
+        gain.gain.setValueAtTime(0.32, now + i * 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.2 + 0.3);
         osc.connect(gain).connect(ctx.destination);
         osc.start(now + i * 0.2);
-        osc.stop(now + i * 0.2 + 0.25);
+        osc.stop(now + i * 0.2 + 0.3);
       });
     }
   } catch(e){ /* audio fail = silent */ }
@@ -424,25 +439,37 @@ ws.onmessage = (e) => {
     case 'show_question':
       qEl.textContent = m.text;
       qEl.style.setProperty('--q-color', m.hex || 'transparent');
+      setThinking(false);
+      sttHeardEl.classList.remove('show');
       break;
     case 'await_answer':
       statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)';
       if (qEl.textContent) qEl.classList.add('show', 'has-color');
+      setThinking(false);
+      sttHeardEl.classList.remove('show');
       break;
-    case 'unlock_color':
-      unlockHex(m.hex);
-      koonHappy();
-      const ui = RAINBOW_HEX.indexOf(m.hex);
-      if(ui >= 0) orbDone(ui);
+    case 'correct_answer':
+      // ĐÚNG: ăn mừng ngay (confetti + chime) — trước khi KOON xác nhận bằng giọng
+      setThinking(false);
+      sttHeardEl.classList.remove('show');
       statusEl.textContent = '✅ ĐÚNG! Mảnh màu đã được tìm thấy!';
+      koonHappy();
       burstConfetti(60, [m.hex, '#ffd700', '#fff']);
-      // Thêm hiệu ứng pháo bông (sử dụng magic particles)
       magicCanvas.classList.add('on');
       startMagicParticles();
       setTimeout(() => { magicCanvas.classList.remove('on'); stopMagicParticles(); }, 2500);
       playChime('correct');
       break;
+    case 'unlock_color':
+      // Sáng vòm cầu vồng + chấm tròn tiến trình (sau khi KOON đã xác nhận xong)
+      unlockHex(m.hex);
+      const ui = RAINBOW_HEX.indexOf(m.hex);
+      if(ui >= 0) orbDone(ui);
+      break;
     case 'wrong_answer':
+      // SAI: tiếng báo sai trước, KOON sẽ nói sau (server đợi 0.6s)
+      setThinking(false);
+      statusEl.textContent = '❌ Chưa đúng rồi, KOON gợi ý nha…';
       playChime('wrong');
       break;
     case 'rainbow':
@@ -463,6 +490,7 @@ ws.onmessage = (e) => {
       qEl.classList.remove('show', 'has-color');
       qEl.textContent=''; statusEl.textContent=''; finaleEl.classList.remove('show');
       sttHeardEl.classList.remove('show');
+      setThinking(false);
       hideRecap();
       koonMagicOut();
       flashEl.classList.remove('on');
@@ -635,13 +663,28 @@ function koonMagicOut(){
   stopMagicParticles();
 }
 
+// ============================== THINKING / SUBMITTED ANSWER ==============================
+function setThinking(on){
+  thinkingEl.classList.toggle('show', !!on);
+  statusEl.style.visibility = on ? 'hidden' : 'visible';
+  // Khoá ô nhập + mic + nút gửi khi đang chấm đáp án (tránh gửi trùng / nói chồng)
+  document.getElementById('answerText').disabled = !!on;
+  document.getElementById('mic').disabled = !!on;
+  document.getElementById('send').disabled = !!on;
+}
+function showSubmittedAnswer(text){
+  sttHeardEl.textContent = `💬 "${text}"`;
+  sttHeardEl.classList.add('show');
+}
+
 // ============================== ANSWER ==============================
 function sendAnswer(){
   const t = document.getElementById('answerText').value.trim();
   if(!t) return;
   ws.send(JSON.stringify({type:'answer', text:t}));
   document.getElementById('answerText').value='';
-  statusEl.textContent='...';
+  showSubmittedAnswer(t);
+  setThinking(true);
 }
 document.getElementById('answerText').addEventListener('keydown', e=>{ if(e.key==='Enter') sendAnswer(); });
 
@@ -706,15 +749,16 @@ function toggleMic(){
   recognizeOnce({
     onInterim:t=> {
       statusEl.textContent = t ? `… ${t}` : '👂 đang nghe...';
-      sttHeardEl.textContent = t ? `KOON nghe được: "${t}"` : '';
-      if(t) sttHeardEl.classList.add('show');
+      if(t){ sttHeardEl.textContent = `💬 "${t}"`; sttHeardEl.classList.add('show'); }
+      else sttHeardEl.classList.remove('show');
     },
     onFinal:(text,engine)=>{
       statusEl.textContent = text ? `bé nói: "${text}"` : '(không nghe rõ — thử lại)';
-      sttHeardEl.textContent = text ? `KOON nghe được: "${text}"` : '';
-      if(text) sttHeardEl.classList.add('show');
-      if(text) ws.send(JSON.stringify({type:'answer', text, stt:engine}));
-      setTimeout(() => sttHeardEl.classList.remove('show'), 4000);
+      if(text){
+        showSubmittedAnswer(text);
+        ws.send(JSON.stringify({type:'answer', text, stt:engine}));
+        setThinking(true);
+      }
     },
     onError:e=> statusEl.textContent='lỗi STT: '+e+(e==='not-allowed'?' (cấp quyền mic cho site)':''),
     onEnd:()=>{ btn.classList.remove('rec'); btn.textContent='🎤 Mic'; },

@@ -359,6 +359,9 @@ async def run_flow(s: Session):
                 await s.state()
 
                 if correct:
+                    # Phản hồi ĐÚNG ngay (confetti + chime ở frontend) TRƯỚC khi KOON nói
+                    await s.send({"type": "correct_answer", "hex": ch["hex"]})
+                    await asyncio.sleep(0.6)  # chờ chime đúng phát xong rồi KOON mới nói
                     if reply:
                         # Đáp án thay thế hợp lý → LLM reply động xác nhận (đúng sự thật)
                         await s.say(reply)
@@ -373,7 +376,9 @@ async def run_flow(s: Session):
                     break
                 else:
                     # Phản hồi hội thoại động (LLM/Kokoro) — KHÔNG đọc lại câu hỏi
+                    # Tiếng báo sai phát trước, đợi ~0.6s rồi KOON mới nói (không đè tiếng)
                     await s.send({"type": "wrong_answer"})
+                    await asyncio.sleep(0.6)
                     await s.say(reply)
 
         # ---- RAINBOW ----
