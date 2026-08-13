@@ -49,7 +49,7 @@ TTS_DIR = tempfile.mkdtemp(prefix="timnang_tts_")
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OR_BASE = "https://openrouter.ai/api/v1"
 OR_MODEL = os.environ.get("OR_MODEL", "openai/gpt-4o-mini")
-llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY) if OR_KEY else None
+llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY, timeout=5.0) if OR_KEY else None
 log.info("Vision/LLM: %s", ("OpenRouter " + OR_MODEL) if llm else "TẮT — operator duyệt tay")
 
 # ---------- Kokoro TTS (đồng bộ init như server.py) ----------

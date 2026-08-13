@@ -58,13 +58,19 @@ RECOGNIZE_DEBOUNCE = 1.5   # giây chờ giữa các lần bấm nhận diện c
 # Vòng kết thúc khi cả 3 đội nhận diện đúng (all_done) hoặc operator bấm skip/next.
 
 # Số → chữ Việt cho TTS (Kokoro đọc CHỮ rõ hơn SỐ — tránh "Vòng 1" bị đoán sai).
-# Đủ cho vòng (1-6) + điểm (0-18 = 6 vòng × 3).
-_NUM_VI = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín", "mười",
-           "mười một", "mười hai", "mười ba", "mười bốn", "mười lăm", "mười sáu", "mười bảy", "mười tám"]
+# Đủ cho tổng điểm tối đa 6 vòng × 6 đội = 36. Lưu ý "21" đọc "hai mốt", "25" đọc "hai lăm".
+_NUM_VI = [
+    "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín",
+    "mười", "mười một", "mười hai", "mười ba", "mười bốn", "mười lăm",
+    "mười sáu", "mười bảy", "mười tám", "mười chín",
+    "hai mươi", "hai mốt", "hai hai", "hai ba", "hai tư", "hai lăm",
+    "hai sáu", "hai bảy", "hai tám", "hai chín",
+    "ba mươi", "ba mốt", "ba hai", "ba ba", "ba tư", "ba lăm", "ba mươi sáu",
+]
 
 
 def num_vi(n) -> str:
-    """1 → 'một', 15 → 'mười lăm'. Ngoài 0-18 thì trả str(n)."""
+    """1 → 'một', 15 → 'mười lăm', 21 → 'hai mốt'. Ngoài 0-36 thì trả str(n)."""
     try:
         return _NUM_VI[int(n)] if 0 <= int(n) < len(_NUM_VI) else str(n)
     except (TypeError, ValueError):

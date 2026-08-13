@@ -46,7 +46,7 @@ log.info("TTS temp dir: %s", TTS_DIR)
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OR_BASE = "https://openrouter.ai/api/v1"
 OR_MODEL = os.environ.get("OR_MODEL", "openai/gpt-4o-mini")
-llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY) if OR_KEY else None
+llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY, timeout=5.0) if OR_KEY else None
 log.info("LLM judge: %s", "OpenRouter " + OR_MODEL if llm else "TẮT — dùng fuzzy match")
 
 # ---------- Kokoro Vietnamese TTS (ONNX CPU) ----------
@@ -73,13 +73,36 @@ def get_tts():
 # Khởi tạo TTS từ đầu để load model ngay
 _ = get_tts()
 
+import re
+import unicodedata
+
+
 # ---------- judge + reply ----------
+def remove_accents(text: str) -> str:
+    """Bỏ dấu tiếng Việt và ký tự đặc biệt để matching dự phòng khi mất mạng."""
+    if not text:
+        return ""
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    text = text.replace('đ', 'd').replace('Đ', 'D')
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.strip().lower()
+
+
 def judge_fuzzy(text: str, ch: dict) -> bool:
     t = (text or "").strip().lower()
     if not t:
         return False
+    t_norm = remove_accents(t)
     cands = [ch["answer"]] + ch.get("aliases", [])
-    return any(fuzz.partial_ratio(t, c) >= 80 for c in cands)
+    for c in cands:
+        c_lower = c.strip().lower()
+        c_norm = remove_accents(c_lower)
+        if fuzz.partial_ratio(t, c_lower) >= 80 or fuzz.partial_ratio(t_norm, c_norm) >= 80:
+            return True
+        if c_norm and (c_norm in t_norm or t_norm in c_norm):
+            return True
+    return False
 
 
 def _reply_template(ch: dict, attempts: int) -> str:
@@ -238,7 +261,9 @@ class Session:
         """Phát text qua Kokoro TTS (sinh động, WAV), chờ kết thúc."""
         tts = get_tts()
         if not tts:
-            log.warning("TTS không có — bỏ qua: '%s'", text[:50])
+            delay = max(1.5, min(8.0, len(text) * 0.07))
+            log.warning("TTS không có — giả lập thời gian đọc %.1fs: '%s'", delay, text[:50])
+            await asyncio.sleep(delay)
             return
 
         # Sinh audio trong thread riêng để không block event loop
@@ -330,12 +355,6 @@ async def run_flow(s: Session):
             s.idx = i
             s.phase = "ask"
             await s.state()
-            await s.send({
-                "type": "show_question",
-                "text": ch["question_text"],
-                "color": ch["color"],
-                "hex": ch["hex"],
-            })
 
             attempts = 0
             read_q = True  # đọc câu hỏi lần đầu (và mỗi khi operator bấm replay)
@@ -352,6 +371,13 @@ async def run_flow(s: Session):
                         ch["q"],
                         f"Câu hỏi thứ {ch['n']} màu {ch['color'].lower()}: {ch['question_text']}",
                     )
+                    # Chờ KOON đọc xong câu đố rồi mới hiện chữ lên màn hình
+                    await s.send({
+                        "type": "show_question",
+                        "text": ch["question_text"],
+                        "color": ch["color"],
+                        "hex": ch["hex"],
+                    })
                     read_q = False
                     if s._op == "skip":
                         s._op = None
@@ -378,7 +404,7 @@ async def run_flow(s: Session):
                     correct = True
                     reply = ""
                 else:
-                    correct, reply = judge_and_reply(ans, ch, attempts)
+                    correct, reply = await asyncio.to_thread(judge_and_reply, ans, ch, attempts)
                 attempts += 1
 
                 log.info("Thử thách %d (lần %d): '%s' -> %s", ch["n"], attempts, ans, "ĐÚNG" if correct else "SAI")
