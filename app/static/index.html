@@ -396,66 +396,112 @@ function playChime(kind){
   } catch(e){ /* audio fail = silent */ }
 }
 
-// ============================== WEBSOCKET ==============================
-const ws = new WebSocket((location.protocol==='https:'?'wss':'ws') + '://' + location.host + '/ws');
-ws.onmessage = (e) => {
-  const m = JSON.parse(e.data);
-  switch(m.type){
-    case 'play_audio': playAudio(m.key); break;
-    case 'stop_audio':
-      // Operator skip/replay → dừng audio đang phát + lip-sync ngay
-      try { player.pause(); player.currentTime = 0; } catch(e){}
-      koon.classList.remove('speaking');
-      lipPcm = null; lipOffset = 0; lipTotal = 0;
-      break;
-    case 'show_question':
-      qEl.textContent = m.text;
-      qEl.style.setProperty('--q-color', m.hex || 'transparent');
-      qEl.classList.add('show', 'has-color');
-      break;
-    case 'await_answer':
-      statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)';
-      break;
-    case 'unlock_color':
-      unlockHex(m.hex);
-      koonHappy();
-      const ui = RAINBOW_HEX.indexOf(m.hex);
-      if(ui >= 0) orbDone(ui);
-      statusEl.textContent = '✅ ĐÚNG! Mảnh màu đã được tìm thấy!';
-      burstConfetti(60, [m.hex, '#ffd700', '#fff']);
-      playChime('correct');
-      break;
-    case 'rainbow':
-      statusEl.textContent = '🌈 Cầu vồng rực rỡ!';
-      qEl.classList.remove('show', 'has-color');
-      clearRainbow();
-      RAINBOW_HEX.forEach((h,i)=>{ unlockHex(h); orbDone(i); });
-      finaleEl.classList.add('show');
-      burstConfetti(150, RAINBOW_HEX);
-      playChime('finale');
-      setTimeout(() => { finaleEl.classList.remove('show'); }, 3500);
-      break;
-    case 'magic_reveal': koonMagicIn(); break;
-    case 'play_video': doFlash(() => { showRecapVideo(m.url); koonMagicOut(); }); break;
-    case 'show_recap_overlay': doFlash(() => { showRecapOverlay(); koonMagicOut(); }); break;
-    case 'reset':
-      clearRainbow();
-      qEl.classList.remove('show', 'has-color');
-      qEl.textContent=''; statusEl.textContent=''; finaleEl.classList.remove('show');
-      sttHeardEl.classList.remove('show');
-      hideRecap();
-      koonMagicOut();
-      flashEl.classList.remove('on');
-      document.querySelectorAll('.orb').forEach(o => o.classList.remove('done', 'active'));
-      break;
-    case 'state':
-      phaseTag.textContent = `${m.phase} · ${m.idx+1}/${m.total} · mở ${m.unlocked.length}`;
-      document.querySelectorAll('.orb').forEach(o => o.classList.remove('active'));
-      const cur = document.getElementById('orb-' + m.idx);
-      if(cur && m.phase === 'ask') cur.classList.add('active');
-      break;
+// ============================== TOAST & WEBSOCKET ==============================
+let ws = null;
+let wsRetryTimer = null;
+
+function showToast(msg, isErr = false) {
+  let t = document.getElementById('netToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'netToast';
+    t.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;padding:10px 18px;border-radius:10px;font-weight:bold;font-size:14px;box-shadow:0 4px 15px rgba(0,0,0,0.3);transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(t);
   }
-};
+  t.textContent = msg;
+  t.style.background = isErr ? '#e74c3c' : '#2ecc71';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  if (!isErr) {
+    setTimeout(() => { if (t) t.style.opacity = '0'; }, 3000);
+  }
+}
+
+function sendWS(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+  }
+}
+
+function initWS() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${protocol}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    showToast('⚡ Đã kết nối máy chủ KOON');
+    if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  };
+
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    switch(m.type){
+      case 'play_audio': playAudio(m.key); break;
+      case 'stop_audio':
+        // Operator skip/replay → dừng audio đang phát + lip-sync ngay
+        try { player.pause(); player.currentTime = 0; } catch(e){}
+        koon.classList.remove('speaking');
+        lipPcm = null; lipOffset = 0; lipTotal = 0;
+        break;
+      case 'show_question':
+        qEl.textContent = m.text;
+        qEl.style.setProperty('--q-color', m.hex || 'transparent');
+        qEl.classList.add('show', 'has-color');
+        break;
+      case 'await_answer':
+        statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)';
+        break;
+      case 'unlock_color':
+        unlockHex(m.hex);
+        koonHappy();
+        const ui = RAINBOW_HEX.indexOf(m.hex);
+        if(ui >= 0) orbDone(ui);
+        statusEl.textContent = '✅ ĐÚNG! Mảnh màu đã được tìm thấy!';
+        burstConfetti(60, [m.hex, '#ffd700', '#fff']);
+        playChime('correct');
+        break;
+      case 'rainbow':
+        statusEl.textContent = '🌈 Cầu vồng rực rỡ!';
+        qEl.classList.remove('show', 'has-color');
+        clearRainbow();
+        RAINBOW_HEX.forEach((h,i)=>{ unlockHex(h); orbDone(i); });
+        finaleEl.classList.add('show');
+        burstConfetti(150, RAINBOW_HEX);
+        playChime('finale');
+        setTimeout(() => { finaleEl.classList.remove('show'); }, 3500);
+        break;
+      case 'magic_reveal': koonMagicIn(); break;
+      case 'play_video': doFlash(() => { showRecapVideo(m.url); koonMagicOut(); }); break;
+      case 'show_recap_overlay': doFlash(() => { showRecapOverlay(); koonMagicOut(); }); break;
+      case 'reset':
+        clearRainbow();
+        qEl.classList.remove('show', 'has-color');
+        qEl.textContent=''; statusEl.textContent=''; finaleEl.classList.remove('show');
+        sttHeardEl.classList.remove('show');
+        hideRecap();
+        koonMagicOut();
+        flashEl.classList.remove('on');
+        document.querySelectorAll('.orb').forEach(o => o.classList.remove('done', 'active'));
+        break;
+      case 'state':
+        phaseTag.textContent = `${m.phase} · ${m.idx+1}/${m.total} · mở ${m.unlocked.length}`;
+        document.querySelectorAll('.orb').forEach(o => o.classList.remove('active'));
+        const cur = document.getElementById('orb-' + m.idx);
+        if(cur && m.phase === 'ask') cur.classList.add('active');
+        break;
+    }
+  };
+
+  ws.onclose = ws.onerror = () => {
+    showToast('⚠️ Mất kết nối máy chủ! Đang kết nối lại...', true);
+    if (!wsRetryTimer) {
+      wsRetryTimer = setTimeout(() => {
+        wsRetryTimer = null;
+        initWS();
+      }, 2000);
+    }
+  };
+}
+initWS();
 
 // ============================== START ==============================
 function startShow(){
@@ -463,7 +509,7 @@ function startShow(){
   ensureLipCtx();
   player.muted = true;
   player.play().then(() => { player.muted = false; }).catch(() => { player.muted = false; });
-  if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'start' }));
+  sendWS({ type: 'start' });
 }
 
 // ============================== AUDIO ==============================
@@ -474,7 +520,7 @@ function playAudio(key){
   player.play().catch(err=>console.warn('play err', err));
   decodeForLipSync(url);
 }
-player.onended = () => { koon.classList.remove('speaking'); ws.send(JSON.stringify({type:'audio_ended'})); };
+player.onended = () => { koon.classList.remove('speaking'); sendWS({type:'audio_ended'}); };
 
 // ============================== RECAP VIDEO / OVERLAY ==============================
 const recapVideo = document.getElementById('recapVideo');

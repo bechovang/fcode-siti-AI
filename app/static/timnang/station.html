@@ -72,39 +72,85 @@ navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width:
   .then(s => { cam.srcObject = s; })
   .catch(e => { resultEl.className = 'bad'; resultEl.textContent = '⚠️ Không mở được camera: ' + e.message; recBtn.disabled = true; });
 
-// ---- WebSocket ----
-const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/station/' + team);
-ws.onmessage = (e) => {
-  const m = JSON.parse(e.data);
-  switch (m.type) {
-    case 'round':
-      objectBox.textContent = '🎯 Hãy tìm: ' + m.object;
-      objectBox.classList.add('live');
-      resultEl.textContent = ' '; resultEl.className = '';
-      break;
-    case 'scoreboard':
-      document.getElementById('phaseTag').textContent = `Trạm ${team} · vòng ${m.round}/${m.rounds} · ${m.phase}`;
-      const me = m.teams.find(t => t.id === team);
-      if (me) scoreEl.textContent = 'Điểm: ' + me.score;
-      break;
-    case 'result':
-      recBtn.disabled = false;
-      resultEl.textContent = m.msg || '';
-      if (m.correct === true) { resultEl.className = 'ok'; playChime('correct'); burstConfetti(teamColor); }
-      else if (m.correct === false) { resultEl.className = 'bad'; playChime('wrong'); }
-      else { resultEl.className = 'wait'; }
-      break;
-    case 'reset':
-      objectBox.textContent = '⏳ Đợi vòng bắt đầu...'; objectBox.classList.remove('live');
-      resultEl.textContent = ' '; resultEl.className = '';
-      clearConfetti();
-      break;
-    case 'game_over':
-      objectBox.textContent = '🏁 Trò chơi kết thúc!';
-      if (m.winner === team) { resultEl.className = 'ok'; resultEl.textContent = '🏆 Đội mình VÔ ĐỊCH!'; burstConfetti(teamColor, 120); }
-      break;
+// ---- Toast & WebSocket ----
+let ws = null;
+let wsRetryTimer = null;
+
+function showToast(msg, isErr = false) {
+  let t = document.getElementById('netToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'netToast';
+    t.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;padding:10px 18px;border-radius:10px;font-weight:bold;font-size:14px;box-shadow:0 4px 15px rgba(0,0,0,0.3);transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(t);
   }
-};
+  t.textContent = msg;
+  t.style.background = isErr ? '#e74c3c' : '#2ecc71';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  if (!isErr) {
+    setTimeout(() => { if (t) t.style.opacity = '0'; }, 3000);
+  }
+}
+
+function sendWS(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+  }
+}
+
+function initWS() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${protocol}://${location.host}/ws/station/${team}`);
+
+  ws.onopen = () => {
+    showToast(`⚡ Trạm ${team} đã kết nối máy chủ`);
+    if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  };
+
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    switch (m.type) {
+      case 'round':
+        objectBox.textContent = '🎯 Hãy tìm: ' + m.object;
+        objectBox.classList.add('live');
+        resultEl.textContent = ' '; resultEl.className = '';
+        break;
+      case 'scoreboard':
+        document.getElementById('phaseTag').textContent = `Trạm ${team} · vòng ${m.round}/${m.rounds} · ${m.phase}`;
+        const me = m.teams.find(t => t.id === team);
+        if (me) scoreEl.textContent = 'Điểm: ' + me.score;
+        break;
+      case 'result':
+        recBtn.disabled = false;
+        resultEl.textContent = m.msg || '';
+        if (m.correct === true) { resultEl.className = 'ok'; playChime('correct'); burstConfetti(teamColor); }
+        else if (m.correct === false) { resultEl.className = 'bad'; playChime('wrong'); }
+        else { resultEl.className = 'wait'; }
+        break;
+      case 'reset':
+        objectBox.textContent = '⏳ Đợi vòng bắt đầu...'; objectBox.classList.remove('live');
+        resultEl.textContent = ' '; resultEl.className = '';
+        clearConfetti();
+        break;
+      case 'game_over':
+        objectBox.textContent = '🏁 Trò chơi kết thúc!';
+        if (m.winner === team) { resultEl.className = 'ok'; resultEl.textContent = '🏆 Đội mình VÔ ĐỊCH!'; burstConfetti(teamColor, 120); }
+        break;
+    }
+  };
+
+  ws.onclose = ws.onerror = () => {
+    showToast(`⚠️ Trạm ${team} mất kết nối! Đang kết nối lại...`, true);
+    if (!wsRetryTimer) {
+      wsRetryTimer = setTimeout(() => {
+        wsRetryTimer = null;
+        initWS();
+      }, 2000);
+    }
+  };
+}
+initWS();
 
 // ---- Grab frame + send ----
 function recognize() {
@@ -116,7 +162,7 @@ function recognize() {
   const img = snap.toDataURL('image/jpeg', 0.7);
   resultEl.className = 'wait'; resultEl.textContent = '🤖 Đang nhận diện...';
   recBtn.disabled = true;
-  ws.send(JSON.stringify({ type: 'recognize', image: img }));
+  sendWS({ type: 'recognize', image: img });
 }
 recBtn.addEventListener('click', recognize);
 // Phím Space cũng nhận diện

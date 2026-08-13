@@ -128,62 +128,107 @@ TEAMS.forEach(t => {
   g.appendChild(wrap);
 });
 
-const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/master');
-// Báo server khi phát xong (server chờ intro phát trọn vẹn trước khi vào vòng 1).
-// onerror cũng báo để server không treo chờ nếu file audio lỗi/thiếu.
-player.onended = () => { try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {} };
-player.onerror = () => { try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {} };
-ws.onmessage = (e) => {
-  const m = JSON.parse(e.data);
-  switch (m.type) {
-    case 'scoreboard':
-      roundTag.textContent = `vòng ${m.round}/${m.rounds} · ${m.phase}`;
-      if (m.object) { objectEl.textContent = '🎯 ' + m.object; objectEl.classList.toggle('live', m.phase === 'playing'); }
-      else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
-      m.teams.forEach(t => {
-        document.getElementById('score-' + t.id).textContent = t.score;
-        const orderEl = document.getElementById('order-' + t.id);
-        orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + ([3,2,1][t.order-1]||0) : '';
-        const card = document.getElementById('team-' + t.id);
-        card.classList.toggle('finished', !!t.order);
-      });
-      break;
-    case 'play_audio':
-      player.src = '/audio/' + m.key;
-      player.play().catch(() => {});
-      break;
-    case 'stop_audio':
-      player.pause();
-      player.currentTime = 0;
-      break;
-    case 'game_over':
-      if (m.ranking) showRanking(m.ranking);
-      const win = TEAMS.find(t => t.id === m.winner);
-      if (win) {
-        document.getElementById('team-' + win.id).classList.add('winner');
-        winnerBanner.querySelector('.t').textContent = '🏆 ' + m.winner_name + ' VÔ ĐỊCH!';
-        winnerBanner.querySelector('.t').style.color = win.color;
-        winnerBanner.querySelector('.sub').textContent = 'Cảm ơn tất cả các đội!';
-        winnerBanner.classList.add('show');
-        burstConfetti(win.color, 180);
-        playFanfare();
-        setTimeout(() => winnerBanner.classList.remove('show'), 6000);
-      }
-      break;
-    case 'reset':
-      document.querySelectorAll('.team').forEach(c => c.classList.remove('finished', 'winner'));
-      winnerBanner.classList.remove('show');
-      rankingEl.classList.remove('show');
-      objectEl.classList.remove('live');
-      break;
+let ws = null;
+let wsRetryTimer = null;
+
+function showToast(msg, isErr = false) {
+  let t = document.getElementById('netToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'netToast';
+    t.style.cssText = 'position:fixed;top:16px;right:16px;z-index:9999;padding:10px 18px;border-radius:10px;font-weight:bold;font-size:14px;box-shadow:0 4px 15px rgba(0,0,0,0.3);transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(t);
   }
-};
+  t.textContent = msg;
+  t.style.background = isErr ? '#e74c3c' : '#2ecc71';
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  if (!isErr) {
+    setTimeout(() => { if (t) t.style.opacity = '0'; }, 3000);
+  }
+}
+
+function sendWS(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+  }
+}
+
+player.onended = () => { try { sendWS({ type: 'audio_ended' }); } catch (e) {} };
+player.onerror = () => { try { sendWS({ type: 'audio_ended' }); } catch (e) {} };
+
+function initWS() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${protocol}://${location.host}/ws/master`);
+
+  ws.onopen = () => {
+    showToast('⚡ Đã kết nối Master Server');
+    if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  };
+
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    switch (m.type) {
+      case 'scoreboard':
+        roundTag.textContent = `vòng ${m.round}/${m.rounds} · ${m.phase}`;
+        if (m.object) { objectEl.textContent = '🎯 ' + m.object; objectEl.classList.toggle('live', m.phase === 'playing'); }
+        else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
+        m.teams.forEach(t => {
+          document.getElementById('score-' + t.id).textContent = t.score;
+          const orderEl = document.getElementById('order-' + t.id);
+          orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + ([3,2,1][t.order-1]||0) : '';
+          const card = document.getElementById('team-' + t.id);
+          card.classList.toggle('finished', !!t.order);
+        });
+        break;
+      case 'play_audio':
+        player.src = '/audio/' + m.key;
+        player.play().catch(() => {});
+        break;
+      case 'stop_audio':
+        player.pause();
+        player.currentTime = 0;
+        break;
+      case 'game_over':
+        if (m.ranking) showRanking(m.ranking);
+        const win = TEAMS.find(t => t.id === m.winner);
+        if (win) {
+          document.getElementById('team-' + win.id).classList.add('winner');
+          winnerBanner.querySelector('.t').textContent = '🏆 ' + m.winner_name + ' VÔ ĐỊCH!';
+          winnerBanner.querySelector('.t').style.color = win.color;
+          winnerBanner.querySelector('.sub').textContent = 'Cảm ơn tất cả các đội!';
+          winnerBanner.classList.add('show');
+          burstConfetti(win.color, 180);
+          playFanfare();
+          setTimeout(() => winnerBanner.classList.remove('show'), 6000);
+        }
+        break;
+      case 'reset':
+        document.querySelectorAll('.team').forEach(c => c.classList.remove('finished', 'winner'));
+        winnerBanner.classList.remove('show');
+        rankingEl.classList.remove('show');
+        objectEl.classList.remove('live');
+        break;
+    }
+  };
+
+  ws.onclose = ws.onerror = () => {
+    showToast('⚠️ Mất kết nối Master! Đang kết nối lại...', true);
+    if (!wsRetryTimer) {
+      wsRetryTimer = setTimeout(() => {
+        wsRetryTimer = null;
+        initWS();
+      }, 2000);
+    }
+  };
+}
+initWS();
 
 function op(action, team, delta) {
   const msg = { type: 'op', action };
   if (team) msg.team = team;
   if (delta !== undefined) msg.delta = delta;
-  ws.send(JSON.stringify(msg));
+  sendWS(msg);
 }
 // Phím tắt: Enter = start, Esc = restart
 document.addEventListener('keydown', e => {
