@@ -72,13 +72,36 @@ def get_tts():
 # Khởi tạo TTS từ đầu để load model ngay
 _ = get_tts()
 
+import re
+import unicodedata
+
+
 # ---------- judge + reply ----------
+def remove_accents(text: str) -> str:
+    """Bỏ dấu tiếng Việt và ký tự đặc biệt để matching dự phòng khi mất mạng."""
+    if not text:
+        return ""
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    text = text.replace('đ', 'd').replace('Đ', 'D')
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.strip().lower()
+
+
 def judge_fuzzy(text: str, ch: dict) -> bool:
     t = (text or "").strip().lower()
     if not t:
         return False
+    t_norm = remove_accents(t)
     cands = [ch["answer"]] + ch.get("aliases", [])
-    return any(fuzz.partial_ratio(t, c) >= 80 for c in cands)
+    for c in cands:
+        c_lower = c.strip().lower()
+        c_norm = remove_accents(c_lower)
+        if fuzz.partial_ratio(t, c_lower) >= 80 or fuzz.partial_ratio(t_norm, c_norm) >= 80:
+            return True
+        if c_norm and (c_norm in t_norm or t_norm in c_norm):
+            return True
+    return False
 
 
 def _reply_template(ch: dict, attempts: int) -> str:
