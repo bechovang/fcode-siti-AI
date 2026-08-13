@@ -345,8 +345,8 @@ OUTRO_RECAP = (
 )
 
 MAGIC_LINE = (
-    "Và bây giờ... cùng KOON ngắm điều kỳ diệu nhé!"
-    " Các bạn nhắm mắt lại nào... Ba, hai, một... phép màu xuất hiện!"
+    "Hãy cùng KOON ngắm điều kỳ diệu nhé!"
+    " Các bạn nhắm mắt lại nào. Ba. Hai. Một.  Phép màu xuất hiện!"
 )
 
 OUTRO_GOODBYE = (
