@@ -1,4 +1,4 @@
-"""Dữ liệu Trò 2 — Tìm Nắng Cùng AI (đối kháng 3 đội, nhận diện đồ vật).
+"""Dữ liệu Trò 2 — Tìm Nắng Cùng AI (đối kháng 2–6 đội, nhận diện đồ vật).
 Nguồn sự thật cho master + stations + gen pre-cache TTS.
 """
 import os
@@ -30,14 +30,26 @@ OBJECTS = [
      "vision_prompt": "a plastic bowl (round, colorful)"},
 ]
 
-# 3 đội đối kháng.
+# Bể đội: tối đa 6 (A-F). Trò chơi dùng N đội đầu tiên (N do operator chọn trên web,
+# 2 ≤ N ≤ 6). Màu phải khớp TEAM_COLORS ở station.html / master.html.
 TEAMS = [
     {"id": "A", "name": "Đội A", "color": "#e74c3c"},
     {"id": "B", "name": "Đội B", "color": "#3498db"},
     {"id": "C", "name": "Đội C", "color": "#2ecc71"},
+    {"id": "D", "name": "Đội D", "color": "#9b59b6"},
+    {"id": "E", "name": "Đội E", "color": "#e67e22"},
+    {"id": "F", "name": "Đội F", "color": "#1abc9c"},
 ]
 
-# Điểm theo thứ tự về đích mỗi vòng (nhất/nhì/chót).
+MIN_TEAMS, MAX_TEAMS, DEFAULT_TEAMS = 2, 6, 3
+
+
+def score_for_order(order: int, team_count: int) -> int:
+    """N đội: về nhất +N, nhì +N-1, ..., chót +1. (vd 5 đội → 5/4/3/2/1.)"""
+    return max(1, team_count - order + 1)
+
+
+# Giữ lại cho tham khảo; master.py giờ dùng score_for_order động theo team_count.
 SCORE_BY_ORDER = [3, 2, 1]
 
 ROUNDS = len(OBJECTS)      # 6 vòng = 6 vật phẩm (~5 phút)
@@ -60,8 +72,9 @@ def num_vi(n) -> str:
 
 # ---------- Thoại cố định (pre-cache TTS) ----------
 # ORDER_WORD: hiển thị/khi đọc. ORDER_KEY: hậu tố key pre-cache (không dấu).
-ORDER_WORD = {1: "nhất", 2: "nhì", 3: "ba"}
-ORDER_KEY = {1: "nhat", 2: "nhi", 3: "ba"}
+# Đủ cho tối đa 6 đội (hạng 1-6).
+ORDER_WORD = {1: "nhất", 2: "nhì", 3: "ba", 4: "tư", 5: "năm", 6: "sáu"}
+ORDER_KEY  = {1: "nhat", 2: "nhi", 3: "ba", 4: "tu", 5: "nam", 6: "sau"}
 
 INTRO_TEXT = ("Xin chào các bạn nhỏ! Chào mừng đến với trò chơi Tìm Nắng Cùng AI! "
               "Mỗi vòng, AI sẽ gọi tên một vật phẩm. Các đội hãy bốc mù, giơ trước camera "
@@ -78,11 +91,12 @@ def correct_text(team_name: str, order: int) -> str:
 
 def precache_lines() -> dict:
     """Nguồn sự thật duy nhất cho nội dung thoại cố định → gen pre-cache.
-    Bao gồm: intro (1) + mở vòng (6, theo vật phẩm) + thông báo đúng/thứ tự (9, đội×thứ)."""
+    Bao gồm: intro (1) + mở vòng (6, theo vật phẩm) + thông báo đúng/thứ tự
+    (6 đội × 6 hạng = 36) — gen hết cho MAX_TEAMS để mọi N đội đều có sẵn file phát tức thì."""
     lines = {"intro": INTRO_TEXT}
     for i, obj in enumerate(OBJECTS):
         lines[f"round_{obj['id']}"] = round_text(i, obj)
     for t in TEAMS:
-        for order in (1, 2, 3):
+        for order in range(1, MAX_TEAMS + 1):
             lines[f"correct_{t['id']}_{ORDER_KEY[order]}"] = correct_text(t["name"], order)
     return lines

@@ -14,6 +14,7 @@ import asyncio
 import logging
 import tempfile
 import uuid
+import unicodedata
 
 # Load .env (nếu có python-dotenv) — đảm bảo đọc OPENROUTER_API_KEY, KOON_VOICE,...
 try:
@@ -89,6 +90,22 @@ def _reply_template(ch: dict, attempts: int) -> str:
     return f"Gần được rồi! {hint}. Các bạn nghĩ thêm một chút nha, mình tin các bạn làm được!"
 
 
+def _leaks_answer(reply: str, ch: dict) -> bool:
+    """True nếu reply nhắc đến đáp án/alias (sau khi bỏ dấu + khoảng trắng).
+    Dùng làm backstop: LLM đôi khi vẫn lỡ mồm dù prompt cấm → vứt reply đó."""
+    def norm(s: str) -> str:
+        s = (s or "").lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(c for c in s if not unicodedata.combining(c))   # bỏ dấu
+        return "".join(s.split())                                   # bỏ khoảng trắng
+    nr = norm(reply)
+    for cand in [ch["answer"]] + ch.get("aliases", []):
+        nc = norm(cand)
+        if len(nc) >= 4 and nc in nr:   # >=4 để tránh alias ngắn (dưa/sên/hè) false-positive
+            return True
+    return False
+
+
 def judge_and_reply(text: str, ch: dict, attempts: int = 0):
     """Trả (correct, reply).
     - correct=True → reply='' (dùng pre-cache right, nhanh).
@@ -102,25 +119,30 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
         return True, ""
     if llm:
         sysp = (
-            "Bạn là KOON, nhân vật AI dẫn trò chơi đố vui cho trẻ em tiếng Việt, đang chơi cùng các bạn nhỏ. Nhiệm vụ:\n"
-            "1. Chấm xem câu bé nói có THỎA MÃN câu đố không. CÂU ĐỐ CÓ THỂ CÓ NHIỀU ĐÁP ÁN HỢP LÝ — bất kỳ đáp án nào "
-            "đúng với mô tả đều ĐÚNG, không chỉ đáp án gợi ý. Ví dụ \"cái gì có 4 chân nhưng không biết đi\" thì "
-            "\"cái bàn\", \"ghế\", \"tủ\", \"giường\" đều ĐÚNG. Đáp án sai logic (không thỏa mãn mô tả) mới là SAI. "
-            "Chấp nhận sai chính tả, không dấu, từ đồng nghĩa, từ lễ phép (dạ/ạ/em).\n"
-            "Lưu ý: đáp án gợi ý là đáp án chính/cổ điển của câu đố. Một đáp án KHÁC chỉ ĐÚNG khi nó RÕ RÀNG thỏa mãn "
-            "toàn bộ các đặc điểm trong mô tả (không chỉ cùng nhóm/tương tự). Nếu chỉ hơi giống hoặc thiếu một đặc điểm "
-            "quan trọng → SAI. Ví dụ \"chúa tể rừng xanh\" → sư tử ĐÚNG, còn hổ/beo là SAI (không phải chúa tể rừng xanh).\n"
-            "2. Nếu ĐÚNG: sinh 1-2 câu khen ngợi + XÁC NHẬN đáp án bé nói (đúng sự thật, động theo câu bé nói). "
-            "Ví dụ bé nói \"ghế\": \"Đúng rồi! Ghế cũng có bốn chân và không biết đi! Các bạn giỏi quá!\". "
-            "Không cần khớp đáp án gợi ý.\n"
-            "3. Nếu SAI: sinh 1-2 câu đáp lại hội thoại, lễ phép, khích lệ thử lại — dựa câu bé nói và gợi ý. "
-            "KHÔNG tiết lộ đáp án. TUYỆT ĐỐI KHÔNG bịa ra lý do sai sự thật để bác bỏ (ví dụ không được nói "
-            "\"ghế không có chân\" khi ghế có chân). Nếu không chắc bé nói đúng hay sai, hãy cho là SAI rồi gợi ý thêm.\n"
+            "Bạn là KOON, nhân vật AI dẫn trò chơi đố vui cho trẻ em tiếng Việt. Nhiệm vụ:\n"
+            "1. Chấm xem câu bé nói có THỎA MÃN mô tả câu đố không. Câu đố có thể có nhiều đáp án hợp lý — "
+            "bất kỳ đáp án nào đúng với mô tả đều ĐÚNG. Ví dụ \"cái gì có 4 chân nhưng không biết đi\" thì "
+            "\"cái bàn\", \"ghế\", \"tủ\", \"giường\" đều ĐÚNG. Đáp án không thỏa mãn mô tả mới là SAI. "
+            "Chấp nhận sai chính tả, không dấu, từ đồng nghĩa, từ lễ phép (dạ/ạ/em). "
+            "Một đáp án chỉ ĐÚNG khi RÕ RÀNG thỏa mãn TOÀN BỘ các đặc điểm trong mô tả; nếu chỉ hơi giống "
+            "hoặc thiếu một đặc điểm quan trọng thì SAI.\n"
+            "2. Nếu ĐÚNG: sinh 1-2 câu khen ngợi + xác nhận đáp án bé nói (chỉ dựa vào đặc điểm đã CÓ SẴN trong "
+            "câu đố, không bịa). Ví dụ bé nói \"ghế\": \"Đúng rồi! Ghế cũng có bốn chân và không biết đi! Các bạn giỏi quá!\".\n"
+            "3. Nếu SAI: sinh 1-2 câu đáp lại lễ phép, khích lệ thử lại. QUY TẮC BẮT BUỘC (tránh lộ đáp án cho các đội khác):\n"
+            "   - CHỈ được dùng thông tin từ câu bé nói và Gợi ý đã cho.\n"
+            "   - TUYỆT ĐỐI KHÔNG nhắc tên, không mô tả, không ví dụ, không so sánh với đáp án đúng (kể cả khi bé đoán rất gần).\n"
+            "   - KHÔNG đưa thêm đặc điểm MỚI của đáp án đúng (đặc điểm nào chưa có trong câu đố/gợi ý thì cấm nhắc tới).\n"
+            "   Ví dụ bé nói \"cà chua\" (sai): chỉ nói kiểu \"Cà chua là một trái hay ghê, nhưng chưa phải đáp án mình "
+            "tìm đâu! Các bạn nghe gợi ý rồi thử lại nha!\" — KHÔNG được nhắc 'hạt đen', 'vỏ xanh', 'dưa' hay bất kỳ "
+            "đặc điểm của đáp án đúng.\n"
+            "Không bịa lý do sai sự thật để bác bỏ. Nếu không chắc đúng/sai, cho là SAI rồi gợi ý thêm.\n"
             "Luôn an toàn, vui vẻ, phù hợp trẻ em; không thô tục, không nhắc chuyện người lớn.\n"
             'Chỉ trả JSON hợp lệ: {"correct": true|false, "reply": "..."}.'
         )
-        usrp = (f"Câu đố: \"{ch['question_text']}\". Đáp án gợi ý (chỉ tham khảo): \"{ch['answer']}\". "
-                f"Gợi ý: \"{ch['hint']}\". Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
+        # KHÔNG đưa đáp án vào prompt — tránh LLM lỡ mồm nhắc tên đáp án trong phản hồi SAI.
+        usrp = (f"Câu đố: \"{ch['question_text']}\". "
+                f"Gợi ý (được phép dùng trong phản hồi): \"{ch['hint']}\". "
+                f"Số lần bé đã sai trước đó: {attempts}. Câu bé vừa nói: \"{text}\".")
         try:
             r = llm.chat.completions.create(
                 model=OR_MODEL,
@@ -132,7 +154,12 @@ def judge_and_reply(text: str, ch: dict, attempts: int = 0):
             reply = (data.get("reply") or "").strip()
             if correct:
                 return True, reply or "Đúng rồi! Các bạn giỏi quá!"
-            return False, reply or _reply_template(ch, attempts)
+            reply = reply or _reply_template(ch, attempts)
+            if _leaks_answer(reply, ch):
+                # Backstop: LLM vẫn lỡ nhắc đáp án dù prompt cấm → vứt reply, dùng template an toàn.
+                log.info("LLM reply lộ đáp án -> bỏ reply, dùng template an toàn")
+                reply = _reply_template(ch, attempts)
+            return False, reply
         except Exception as e:
             log.warning("LLM judge_and_reply lỗi (%s) -> template", e)
 

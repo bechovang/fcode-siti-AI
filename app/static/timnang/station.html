@@ -9,23 +9,26 @@
   html, body { margin: 0; height: 100%; background: #0b1020; color: #fff;
     font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
   #stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 18px; padding: 20px; }
-  #teamBadge { font-size: clamp(28px, 5vw, 52px); font-weight: 900; padding: 8px 36px; border-radius: 18px;
+    align-items: center; justify-content: center; gap: 13px; padding: 14px; }
+  #teamBadge { font-size: clamp(22px, 3.4vw, 40px); font-weight: 900; padding: 6px 26px; border-radius: 16px;
     box-shadow: 0 8px 30px rgba(0,0,0,.4); }
-  #objectBox { font-size: clamp(22px, 3.5vw, 40px); font-weight: 700; text-align: center;
-    background: rgba(0,0,0,.4); padding: 12px 28px; border-radius: 16px; min-height: 64px;
+  #objectBox { font-size: clamp(18px, 2.8vw, 30px); font-weight: 700; text-align: center;
+    background: rgba(0,0,0,.4); padding: 10px 22px; border-radius: 14px; min-height: 50px;
     display: flex; align-items: center; justify-content: center; transition: all .3s; }
   #objectBox.live { border: 3px solid #ffd700; box-shadow: 0 0 30px rgba(255,215,0,.4); }
-  #camWrap { position: relative; width: min(90vw, 75vh); aspect-ratio: 4/3; border-radius: 20px; overflow: hidden;
-    background: #000; box-shadow: 0 12px 40px rgba(0,0,0,.5); border: 4px solid var(--team, #fff); }
+  /* Camera càng to càng tốt nhưng vẫn để lọt badge + nút + kết quả trên màn.
+     Chiều cao gói = (100vh - ~300px cho UI khác), rộng theo tỉ lệ 4/3, kẹp thêm bởi 94vw. */
+  #camWrap { position: relative; width: min(94vw, calc((100vh - 300px) * 4 / 3)); aspect-ratio: 4/3;
+    border-radius: 20px; overflow: hidden; background: #000;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5); border: 4px solid var(--team, #fff); }
   #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }  /* mirror */
-  #recBtn { font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: 22px 60px; border: none; border-radius: 60px;
+  #recBtn { font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: 18px 56px; border: none; border-radius: 60px;
     cursor: pointer; background: linear-gradient(135deg, #ffd700, #ff9800); color: #3a2a00;
     box-shadow: 0 10px 36px rgba(255,152,0,.45); transition: transform .1s; }
   #recBtn:hover:not(:disabled) { transform: scale(1.05); }
   #recBtn:active:not(:disabled) { transform: scale(.96); }
   #recBtn:disabled { opacity: .5; cursor: wait; }
-  #result { font-size: clamp(20px, 3vw, 32px); font-weight: 700; min-height: 48px; text-align: center; transition: all .3s; }
+  #result { font-size: clamp(20px, 3vw, 32px); font-weight: 700; min-height: 40px; text-align: center; transition: all .3s; }
   #result.ok { color: #2ecc71; text-shadow: 0 0 20px rgba(46,204,113,.5); }
   #result.bad { color: #ff6b6b; }
   #result.wait { color: #ffd700; }
@@ -50,8 +53,8 @@
 <canvas id="snap" hidden></canvas>
 
 <script>
-const TEAM_COLORS = { A: '#e74c3c', B: '#3498db', C: '#2ecc71' };
-const TEAM_NAMES  = { A: 'Đội A',  B: 'Đội B',  C: 'Đội C' };
+const TEAM_COLORS = { A: '#e74c3c', B: '#3498db', C: '#2ecc71', D: '#9b59b6', E: '#e67e22', F: '#1abc9c' };
+const TEAM_NAMES  = { A: 'Đội A', B: 'Đội B', C: 'Đội C', D: 'Đội D', E: 'Đội E', F: 'Đội F' };
 const team = location.pathname.split('/').pop().toUpperCase();
 const teamColor = TEAM_COLORS[team] || '#fff';
 
@@ -108,6 +111,7 @@ ws.onmessage = (e) => {
 
 // ---- Grab frame + send ----
 function recognize() {
+  if (recBtn.disabled) return;                      // đang xử lý → bỏ qua (chặn đúp Space/Enter/click)
   if (!cam.videoWidth) { resultEl.className = 'bad'; resultEl.textContent = 'Camera chưa sẵn sàng'; return; }
   const w = 480, h = Math.round(480 * cam.videoHeight / cam.videoWidth);
   snap.width = w; snap.height = h;
@@ -118,9 +122,11 @@ function recognize() {
   recBtn.disabled = true;
   ws.send(JSON.stringify({ type: 'recognize', image: img }));
 }
-recBtn.addEventListener('click', recognize);
-// Phím Space cũng nhận diện
-document.addEventListener('keydown', e => { if (e.key === ' ' && !recBtn.disabled) { e.preventDefault(); recognize(); } });
+recBtn.addEventListener('click', () => { recognize(); recBtn.blur(); });
+// Phím Space HOẶC Enter đều nhận diện (recognize() tự chặn khi đang bận → không đúp).
+document.addEventListener('keydown', e => {
+  if ((e.key === ' ' || e.key === 'Enter') && !recBtn.disabled) { e.preventDefault(); recognize(); }
+});
 
 // ---- Chime (Web Audio) ----
 let actx = null;
