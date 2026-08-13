@@ -336,6 +336,7 @@ INTRO_CHUNK_KEYS = [
 ]
 # Chữ hiện trên nút "nói tiếp" ở góc trái trên (câu operator cần chờ trẻ đồng thanh).
 INTRO_PROMPTS = ["👏 Có!", "👏 Có!", "👏 Sẵn sàng!", "👏 Bắt đầu!"]
+RECAP_PROMPT = "👏 Có, xem điều kỳ diệu!"
 
 OUTRO_RECAP = (
     "Cảm ơn tất cả các bạn đã giúp Koon tìm lại đủ bảy sắc màu!"
@@ -466,6 +467,17 @@ async def run_flow(s: Session):
         s.phase = "recap"
         await s.state()
         await s.play_or_say(K.RECAP, OUTRO_RECAP)
+        # Dừng tương tác: KOON vừa hỏi "có muốn xem điều kỳ diệu không?" → operator
+        # bấm nút "nói tiếp" mới chạy phần Magic reveal (không reveal sớm khi mọi người
+        # chưa sẵn sàng). Giống điểm dừng ở intro, dùng nút introContinue trên màn.
+        if s._op == "skip":
+            s._op = None
+        else:
+            s._continue_ready.clear()
+            await s.send({"type": "intro_pause", "prompt": RECAP_PROMPT})
+            await s._continue_ready.wait()
+            if s._op == "skip":
+                s._op = None
         # Magic reveal: KOON bay giữa màn + hô biến → chuyển video
         await s.send({"type": "magic_reveal"})
         await s.say(MAGIC_LINE)
