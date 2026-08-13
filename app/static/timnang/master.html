@@ -154,10 +154,27 @@ function reconcileTeams(teams, teamCount) {
 }
 
 const ws = new WebSocket((location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/ws/master');
-// Báo server khi phát xong (server chờ intro phát trọn vẹn trước khi vào vòng 1).
-// onerror cũng báo để server không treo chờ nếu file audio lỗi/thiếu.
-player.onended = () => { try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {} };
-player.onerror = () => { try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {} };
+// Hàng đợi audio: nhiều lệnh play_audio đến gần nhau (vd vài đội về cùng lúc nhau,
+// hoặc "Đội X về thứ ba!" + "Hết vòng") sẽ phát TUẦN TỰ, clip trước phát trọn vẹn rồi
+// clip sau mới phát — KHÔNG bị đè/cắt nhau (không skip lời thông báo đội nào).
+const audioQueue = [];
+let audioPlaying = false;
+function audioNext(){
+  if (audioPlaying || !audioQueue.length) return;
+  audioPlaying = true;
+  player.src = '/audio/' + audioQueue.shift();
+  player.play().catch(() => { audioPlaying = false; audioNext(); });
+}
+// Báo server khi phát xong (server chờ audio_ended nếu có yêu cầu wait).
+// onerror cũng báo + chuyển clip kế để không kẹt hàng đợi.
+player.onended = () => {
+  try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {}
+  audioPlaying = false; audioNext();
+};
+player.onerror = () => {
+  try { ws.send(JSON.stringify({ type: 'audio_ended' })); } catch (e) {}
+  audioPlaying = false; audioNext();
+};
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   switch (m.type) {
@@ -169,10 +186,12 @@ ws.onmessage = (e) => {
       if (m.team_count) { const sel = document.getElementById('teamCount'); if (sel) sel.value = m.team_count; }
       break;
     case 'play_audio':
-      player.src = '/audio/' + m.key;
-      player.play().catch(() => {});
+      audioQueue.push(m.key);
+      audioNext();
       break;
     case 'stop_audio':
+      audioQueue.length = 0;   // dọn hàng đợi (op restart/skip) — không phát clip cũ nữa
+      audioPlaying = false;
       player.pause();
       player.currentTime = 0;
       break;
