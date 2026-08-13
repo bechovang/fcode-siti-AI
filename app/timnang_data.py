@@ -30,38 +30,48 @@ OBJECTS = [
      "vision_prompt": "a plastic bowl (round, colorful)"},
 ]
 
-# 3 đội đối kháng.
-TEAMS = [
+# Tất cả các đội có thể tham gia (mặc định 3, hỗ trợ lên tới 5)
+ALL_TEAMS = [
     {"id": "A", "name": "Đội A", "color": "#e74c3c"},
     {"id": "B", "name": "Đội B", "color": "#3498db"},
     {"id": "C", "name": "Đội C", "color": "#2ecc71"},
+    {"id": "D", "name": "Đội D", "color": "#f1c40f"},
+    {"id": "E", "name": "Đội E", "color": "#9b59b6"},
 ]
 
-# Điểm theo thứ tự về đích mỗi vòng (nhất/nhì/chót).
+def get_teams(count: int = 3):
+    count = max(2, min(len(ALL_TEAMS), count))
+    return ALL_TEAMS[:count]
+
+TEAMS = get_teams(int(os.environ.get("TEAMS_COUNT", "3")))
+
+def get_points_by_order(order: int, num_teams: int) -> int:
+    """Thang điểm động: 4 đội thì 4-3-2-1, 5 đội thì 5-4-3-2-1 điểm."""
+    if 1 <= order <= num_teams:
+        return num_teams - order + 1
+    return 0
+
+# Tạm giữ SCORE_BY_ORDER cho backward compatibility
 SCORE_BY_ORDER = [3, 2, 1]
 
 ROUNDS = len(OBJECTS)      # 6 vòng = 6 vật phẩm (~5 phút)
 RECOGNIZE_DEBOUNCE = 1.5   # giây chờ giữa các lần bấm nhận diện của 1 đội
-# KHÔNG tự timeout mỗi vòng — ban tổ chức điều khiển tiến trình (Bỏ qua vòng / Vòng kế).
-# Vòng kết thúc khi cả 3 đội nhận diện đúng (all_done) hoặc operator bấm skip/next.
 
-# Số → chữ Việt cho TTS (Kokoro đọc CHỮ rõ hơn SỐ — tránh "Vòng 1" bị đoán sai).
-# Đủ cho vòng (1-6) + điểm (0-18 = 6 vòng × 3).
 _NUM_VI = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín", "mười",
-           "mười một", "mười hai", "mười ba", "mười bốn", "mười lăm", "mười sáu", "mười bảy", "mười tám"]
+           "mười một", "mười hai", "mười ba", "mười bốn", "mười lăm", "mười sáu", "mười bảy", "mười tám",
+           "mười chín", "hai mươi", "hai mốt", "hai hai", "hai ba", "hai tư", "hai lăm"]
 
 
 def num_vi(n) -> str:
-    """1 → 'một', 15 → 'mười lăm'. Ngoài 0-18 thì trả str(n)."""
+    """1 → 'một', 15 → 'mười lăm'. Trả str(n) nếu ngoài dải."""
     try:
         return _NUM_VI[int(n)] if 0 <= int(n) < len(_NUM_VI) else str(n)
     except (TypeError, ValueError):
         return str(n)
 
 # ---------- Thoại cố định (pre-cache TTS) ----------
-# ORDER_WORD: hiển thị/khi đọc. ORDER_KEY: hậu tố key pre-cache (không dấu).
-ORDER_WORD = {1: "nhất", 2: "nhì", 3: "ba"}
-ORDER_KEY = {1: "nhat", 2: "nhi", 3: "ba"}
+ORDER_WORD = {1: "nhất", 2: "nhì", 3: "ba", 4: "tư", 5: "năm"}
+ORDER_KEY = {1: "nhat", 2: "nhi", 3: "ba", 4: "tu", 5: "nam"}
 
 INTRO_TEXT = ("Xin chào các bạn nhỏ! Chào mừng đến với trò chơi Tìm Nắng Cùng AI! "
               "Mỗi vòng, AI sẽ gọi tên một vật phẩm. Các đội hãy bốc mù, giơ trước camera "
@@ -77,12 +87,11 @@ def correct_text(team_name: str, order: int) -> str:
 
 
 def precache_lines() -> dict:
-    """Nguồn sự thật duy nhất cho nội dung thoại cố định → gen pre-cache.
-    Bao gồm: intro (1) + mở vòng (6, theo vật phẩm) + thông báo đúng/thứ tự (9, đội×thứ)."""
+    """Nguồn sự thật duy nhất cho nội dung thoại cố định → gen pre-cache."""
     lines = {"intro": INTRO_TEXT}
     for i, obj in enumerate(OBJECTS):
         lines[f"round_{obj['id']}"] = round_text(i, obj)
-    for t in TEAMS:
-        for order in (1, 2, 3):
+    for t in ALL_TEAMS:
+        for order in (1, 2, 3, 4, 5):
             lines[f"correct_{t['id']}_{ORDER_KEY[order]}"] = correct_text(t["name"], order)
     return lines

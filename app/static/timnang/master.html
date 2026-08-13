@@ -88,8 +88,10 @@ const TEAMS = [
   { id: 'A', name: 'Đội A', color: '#e74c3c' },
   { id: 'B', name: 'Đội B', color: '#3498db' },
   { id: 'C', name: 'Đội C', color: '#2ecc71' },
+  { id: 'D', name: 'Đội D', color: '#f1c40f' },
+  { id: 'E', name: 'Đội E', color: '#9b59b6' },
 ];
-const ORDER_WORD = { 1: '🥇 Nhất', 2: '🥈 Nhì', 3: '🥉 Ba' };
+const ORDER_WORD = { 1: '🥇 Nhất', 2: '🥈 Nhì', 3: '🥉 Ba', 4: '🏅 Tư', 5: '🏅 Năm' };
 
 const board = document.getElementById('board');
 const objectEl = document.getElementById('object');
@@ -100,7 +102,7 @@ const rankingEl = document.getElementById('ranking');
 
 // Hiện bảng xếp hạng cuối trò (1-2-3 + điểm)
 function showRanking(ranking) {
-  const medals = ['🥇', '🥈', '🥉'];
+  const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
   const rows = ranking.map((r, i) => `
     <div class="row${i === 0 ? ' first' : ''}" style="border-left:6px solid ${r.color}">
       <span class="medal">${medals[i] || (i + 1)}</span>
@@ -110,23 +112,6 @@ function showRanking(ranking) {
   rankingEl.innerHTML = `<div class="panel"><h2>🏆 BẢNG XẾP HẠNG 🏆</h2>${rows}</div>`;
   rankingEl.classList.add('show');
 }
-
-// Render team cards + operator buttons
-TEAMS.forEach(t => {
-  const card = document.createElement('div');
-  card.className = 'team'; card.id = 'team-' + t.id;
-  card.style.setProperty('--c', t.color);
-  card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
-  board.appendChild(card);
-
-  const g = document.getElementById('teamOps');
-  const wrap = document.createElement('div'); wrap.className = 'group';
-  wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
-    <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
-    <button onclick="op('add_point','${t.id}',1)">+1</button>
-    <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
-  g.appendChild(wrap);
-});
 
 let ws = null;
 let wsRetryTimer = null;
@@ -174,10 +159,26 @@ function initWS() {
         if (m.object) { objectEl.textContent = '🎯 ' + m.object; objectEl.classList.toggle('live', m.phase === 'playing'); }
         else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
         m.teams.forEach(t => {
+          let card = document.getElementById('team-' + t.id);
+          if (!card) {
+            card = document.createElement('div');
+            card.className = 'team'; card.id = 'team-' + t.id;
+            card.style.setProperty('--c', t.color);
+            card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
+            board.appendChild(card);
+
+            const g = document.getElementById('teamOps');
+            const wrap = document.createElement('div'); wrap.className = 'group';
+            wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
+              <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
+              <button onclick="op('add_point','${t.id}',1)">+1</button>
+              <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
+            g.appendChild(wrap);
+          }
           document.getElementById('score-' + t.id).textContent = t.score;
           const orderEl = document.getElementById('order-' + t.id);
-          orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + ([3,2,1][t.order-1]||0) : '';
-          const card = document.getElementById('team-' + t.id);
+          const pts = m.teams.length - t.order + 1;
+          orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + pts + 'đ' : '';
           card.classList.toggle('finished', !!t.order);
         });
         break;

@@ -357,7 +357,7 @@ class Game:
             # đúng → xếp thứ tự
             order = sum(1 for tt in self.teams.values() if tt["order"] is not None) + 1
             t["order"] = order
-            pts = SCORE_BY_ORDER[order - 1] if order <= len(SCORE_BY_ORDER) else 0
+            pts = D.get_points_by_order(order, len(self.teams))
             t["score"] += pts
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
                                         "points": pts, "msg": f"Đúng rồi! Về {ORDER_WORD.get(order, order)}! Cộng {pts} điểm!"})
@@ -384,7 +384,7 @@ class Game:
                 return
             order = sum(1 for tt in self.teams.values() if tt["order"] is not None) + 1
             t["order"] = order
-            pts = SCORE_BY_ORDER[order - 1] if order <= len(SCORE_BY_ORDER) else 0
+            pts = D.get_points_by_order(order, len(self.teams))
             t["score"] += pts
         log.info("Operator force_accept %s -> order %d (+%d)", team, order, pts)
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
