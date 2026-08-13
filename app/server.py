@@ -234,7 +234,9 @@ class Session:
         """Phát text qua Kokoro TTS (sinh động, WAV), chờ kết thúc."""
         tts = get_tts()
         if not tts:
-            log.warning("TTS không có — bỏ qua: '%s'", text[:50])
+            delay = max(1.5, min(8.0, len(text) * 0.07))
+            log.warning("TTS không có — giả lập thời gian đọc %.1fs: '%s'", delay, text[:50])
+            await asyncio.sleep(delay)
             return
 
         # Sinh audio trong thread riêng để không block event loop
