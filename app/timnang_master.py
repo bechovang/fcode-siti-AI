@@ -48,7 +48,7 @@ TTS_DIR = tempfile.mkdtemp(prefix="timnang_tts_")
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OR_BASE = "https://openrouter.ai/api/v1"
 OR_MODEL = os.environ.get("OR_MODEL", "openai/gpt-4o-mini")
-llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY) if OR_KEY else None
+llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY, timeout=5.0) if OR_KEY else None
 log.info("Vision/LLM: %s", ("OpenRouter " + OR_MODEL) if llm else "TẮT — operator duyệt tay")
 
 # ---------- Kokoro TTS (đồng bộ init như server.py) ----------
@@ -206,13 +206,22 @@ class Game:
             await self.broadcast_masters({"type": "play_audio", "key": key})
             if wait:
                 await self._wait_audio()
+            # Dọn file temp trong background sau 60s
+            asyncio.create_task(self._cleanup_temp_file(wav_path, 60.0))
             return True
         except asyncio.TimeoutError:
             log.warning("[TTS timeout] synthesize quá 15s, bỏ qua: %s", text[:60])
         except Exception as e:
             log.warning("[TTS lỗi] %s — bỏ qua: %s", e, text[:60])
         return False
-        # (không dọn file ngay — để endpoint phục vụ; dọn định kỳ nếu cần)
+
+    async def _cleanup_temp_file(self, path: str, delay: float = 60.0):
+        await asyncio.sleep(delay)
+        try:
+            if os.path.isfile(path):
+                os.unlink(path)
+        except Exception:
+            pass
 
     async def play_or_say(self, key: str, text: str, wait: bool = False):
         """Phát pre-cache .wav/.mp3 (tức thì <200ms) nếu có; không thì Kokoro synthesize động.

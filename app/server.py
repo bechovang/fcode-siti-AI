@@ -45,7 +45,7 @@ log.info("TTS temp dir: %s", TTS_DIR)
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OR_BASE = "https://openrouter.ai/api/v1"
 OR_MODEL = os.environ.get("OR_MODEL", "openai/gpt-4o-mini")
-llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY) if OR_KEY else None
+llm = OpenAI(base_url=OR_BASE, api_key=OR_KEY, timeout=5.0) if OR_KEY else None
 log.info("LLM judge: %s", "OpenRouter " + OR_MODEL if llm else "TẮT — dùng fuzzy match")
 
 # ---------- Kokoro Vietnamese TTS (ONNX CPU) ----------
@@ -352,7 +352,7 @@ async def run_flow(s: Session):
                     correct = True
                     reply = ""
                 else:
-                    correct, reply = judge_and_reply(ans, ch, attempts)
+                    correct, reply = await asyncio.to_thread(judge_and_reply, ans, ch, attempts)
                 attempts += 1
 
                 log.info("Thử thách %d (lần %d): '%s' -> %s", ch["n"], attempts, ans, "ĐÚNG" if correct else "SAI")
