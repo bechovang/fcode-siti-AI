@@ -25,7 +25,7 @@ CHALLENGES = [
      "hint": "đồ vật có bốn chân, các bạn ngồi học cùng nó mỗi ngày"},
     {"n": 3, "color": "Vàng", "hex": "#f1c40f", "q": "q3_question", "right": "q3_right", "wrong": "q3_wrong",
      "question_text": "Loài vật nào được mệnh danh là Chúa tể rừng xanh?",
-     "answer": "sư tử", "aliases": ["su tu", "con sư tử"],
+     "answer": "sư tử", "aliases": ["su tu", "con sư tử"], "strict": True,
      "hint": "loài vật này có bờm to, được mệnh danh là chúa tể rừng xanh"},
     {"n": 4, "color": "Xanh lá", "hex": "#2ecc71", "q": "q4_question", "right": "q4_right", "wrong": "q4_wrong",
      "question_text": "Con gì mang ngôi nhà trên lưng?",
