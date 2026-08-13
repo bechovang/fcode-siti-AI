@@ -1,9 +1,9 @@
 """Trò 2 — Tìm Nắng Cùng AI: MASTER (FastAPI + WebSocket + Vision + TTS).
 
-Kiến trúc: 1 máy master (màn LED + loa sân khấu) + 3 trạm (tab browser trên laptop mỗi đội).
+Kiến trúc: 1 máy master (màn LED + loa sân khấu) + N trạm (tab browser trên laptop mỗi đội).
 - Trạm: webcam getUserMedia + nút "NHẬN DIỆN" → grab frame base64 → WS master.
 - Master: vision GPT-4o-mini (OpenRouter) chấm đúng/sai + Kokoro TTS công bố + bảng điểm
-  thời gian thực + luồng 6 vòng (điểm 3-2-1 theo thứ tự về đích).
+  thời gian thực + luồng 6 vòng (điểm động N..1 theo thứ tự về đích, N = số đội).
 
 Chạy:  python app/timnang_master.py   (port 8001 — tách khỏi Trò 1 :8000)
 Stations mở:  http://<master-ip>:8001/station/A   /B   /C
@@ -28,8 +28,10 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import timnang_data as D
-from timnang_data import (OBJECTS, TEAMS, ROUNDS, RECOGNIZE_DEBOUNCE,
-                          SCORE_BY_ORDER, ORDER_WORD, AUDIO_DIR, num_vi)
+from timnang_data import (OBJECTS, TEAMS, ALL_TEAMS, VALID_TEAM_IDS,
+                          DEFAULT_TEAMS, MIN_TEAMS, MAX_TEAMS, ROUNDS,
+                          RECOGNIZE_DEBOUNCE, get_points_by_order, ORDER_WORD,
+                          ORDER_KEY, AUDIO_DIR, num_vi)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
@@ -114,6 +116,7 @@ class Game:
         self.phase = "idle"          # idle | announce | playing | round_end | game_over
         self.round_idx = -1
         self.object = None
+        self.n_teams = len(TEAMS)    # R8: operator đổi từ web UI (set_teams)
         self.teams = {
             t["id"]: {"name": t["name"], "color": t["color"], "score": 0, "order": None, "last_rec": 0.0}
             for t in TEAMS
@@ -174,6 +177,7 @@ class Game:
             "phase": self.phase,
             "round": self.round_idx + 1 if self.round_idx >= 0 else 0,
             "rounds": ROUNDS,
+            "n_teams": self.n_teams,
             "object": self.object["name"] if self.object else None,
             "object_vi": self.object["vi"] if self.object else None,
             "teams": [
@@ -250,16 +254,16 @@ class Game:
                 t["score"] = 0; t["order"] = None
             self.round_idx = -1
             self.phase = "announce"
-        await self.broadcast_masters({"type": "stop_audio"})  # dừng TTS cũ trước khi vào intro
+        await self.broadcast_masters({"type": "stop_audio"})  # dừng TTS cũ
         self._audio_done.set()
         await self.broadcast_all({"type": "reset"})
         await self.sync_scoreboard()
-        # CHỜ intro phát trọn vẹn rồi mới vào vòng 1 — tránh thông báo vòng 1 đè lên
-        # intro (master chỉ có 1 thẻ <audio>, set src mới = cắt audio đang phát).
-        await self.play_or_say("intro", D.INTRO_TEXT, wait=True)
+        # R7: MC tự đọc lời mở đầu ở sân khấu → KHÔNG phát TTS intro. Nút Start đi
+        # thẳng vào vòng 1 (giữ "announce" một khoảnh khắc để hệ thống kịp reset,
+        # và để chặn Start đúp).
         async with self.lock:
             if self.phase != "announce":
-                return  # operator can thiệp giữa intro (restart) → không tự vào vòng
+                return  # operator can thiệp (restart) → không tự vào vòng
         await asyncio.sleep(0.3)
         await self.start_round(0)
 
@@ -327,6 +331,11 @@ class Game:
 
     # ---- recognize (từ station) ----
     async def handle_recognize(self, team: str, image_b64: str):
+        if team not in self.teams:
+            # đội đang bị tắt (operator giảm số đội) — vẫn báo để trạm không kẹt nút
+            await self._send_station(team, {"type": "result", "correct": False,
+                                            "msg": "Đội này chưa tham gia — chờ MC bật đội nhé!"})
+            return
         if self.phase != "playing" or not self.object:
             await self._send_station(team, {"type": "result", "correct": False, "msg": "Chờ vòng bắt đầu nhé!"})
             return
@@ -371,11 +380,15 @@ class Game:
             t["order"] = order
             pts = D.get_points_by_order(order, len(self.teams))
             t["score"] += pts
+            will_end = all(tt["order"] is not None for tt in self.teams.values())
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
-                                        "points": pts, "msg": f"Đúng rồi! Về {ORDER_WORD.get(order, order)}! Cộng {pts} điểm!"})
-        await self.play_or_say(f"correct_{team}_{D.ORDER_KEY.get(order, 'x')}", D.correct_text(t['name'], order))
+                                        "points": pts, "msg": f"Đúng rồi! Về {ORDER_WORD.get(order, order)}! Cộng {num_vi(pts)} điểm!"})
+        # R9 + bug "đội cuối thiếu +1": hiện điểm NGAY (sync trước) rồi mới đọc TTS;
+        # chỉ đội cuối mới chờ TTS đọc xong (wait=will_end) rồi mới end_round — tránh
+        # "Hết vòng X" đè lên "Đội cuối về thứ N" và đảm bảo điểm đội cuối hiện rõ.
         await self.sync_scoreboard()
-        if all(tt["order"] is not None for tt in self.teams.values()):
+        await self.play_or_say(f"correct_{team}_{D.ORDER_KEY.get(order, 'x')}", D.correct_text(t['name'], order), wait=will_end)
+        if will_end:
             await self.end_round("all_done")
 
     async def _send_station(self, team, msg):
@@ -398,13 +411,26 @@ class Game:
             t["order"] = order
             pts = D.get_points_by_order(order, len(self.teams))
             t["score"] += pts
+            will_end = all(tt["order"] is not None for tt in self.teams.values())
         log.info("Operator force_accept %s -> order %d (+%d)", team, order, pts)
         await self._send_station(team, {"type": "result", "correct": True, "order": order,
-                                        "points": pts, "msg": f"Đã duyệt! Về {ORDER_WORD.get(order, order)}! Cộng {pts} điểm!"})
-        await self.play_or_say(f"correct_{team}_{D.ORDER_KEY.get(order, 'x')}", D.correct_text(t['name'], order))
+                                        "points": pts, "msg": f"Đã duyệt! Về {ORDER_WORD.get(order, order)}! Cộng {num_vi(pts)} điểm!"})
         await self.sync_scoreboard()
-        if all(tt["order"] is not None for tt in self.teams.values()):
-            await self.end_round("all_done")
+        key = f"correct_{team}_{D.ORDER_KEY.get(order, 'x')}"
+        text = D.correct_text(t['name'], order)
+        if will_end:
+            # Chạy nền: force_accept chạy trong ws_master — chính kết nối này là nguồn
+            # audio_ended. Nếu chờ inline sẽ kẹt 60s (handler bị block, không đọc được
+            # audio_ended). Spawn để handler trả về ngay, _finish_correct chờ TTS đọc
+            # xong rồi end_round ("Đội cuối về thứ N" không bị "Hết vòng" đè — R9).
+            self._spawn(self._finish_correct(key, text))
+        else:
+            await self.play_or_say(key, text)
+
+    async def _finish_correct(self, key: str, text: str):
+        """Phát TTS đội cuối (chờ hết) rồi kết thúc vòng — chạy nền cho force_accept."""
+        await self.play_or_say(key, text, wait=True)
+        await self.end_round("all_done")
 
     async def add_point(self, team, delta):
         if team not in self.teams:
@@ -424,6 +450,25 @@ class Game:
         await self.broadcast_all({"type": "reset"})
         await self.sync_scoreboard()
 
+    async def set_teams(self, n: int):
+        """R8: đổi số đội từ web UI (operator). Dùng lại pool A–F; rebuild self.teams,
+        reset trạng thái. Các trạm đang kết nối vẫn giữ ws (đội bị tắt sẽ nhận scoreboard
+        nhưng không nhận diện được tới khi được bật lại)."""
+        n = max(MIN_TEAMS, min(MAX_TEAMS, int(n)))
+        async with self.lock:
+            self.n_teams = n
+            self.phase = "idle"
+            self.round_idx = -1
+            self.object = None
+            self.teams = {
+                t["id"]: {"name": t["name"], "color": t["color"], "score": 0, "order": None, "last_rec": 0.0}
+                for t in ALL_TEAMS[:n]
+            }
+        await self.broadcast_masters({"type": "stop_audio"})
+        self._audio_done.set()
+        await self.broadcast_all({"type": "reset"})
+        await self.sync_scoreboard()
+
 
 game = Game()
 
@@ -440,7 +485,7 @@ async def master_page():
 
 @app.get("/station/{team}")
 async def station_page(team: str):
-    if team not in game.teams:
+    if team not in VALID_TEAM_IDS:   # A..F luôn cho tải trang; WS hoạt động khi đội được bật
         return JSONResponse({"error": "team unknown", "team": team}, status_code=404)
     html = os.path.join(STATIC_DIR, "timnang", "station.html")
     return FileResponse(html)
@@ -472,7 +517,8 @@ async def health():
         "tts_voice": os.environ.get("KOON_VOICE", "mai_linh"),
         "vision": bool(llm),
         "vision_model": OR_MODEL if llm else None,
-        "teams": [t["id"] for t in TEAMS],
+        "teams": list(game.teams.keys()),
+        "n_teams": game.n_teams,
         "objects": len(OBJECTS),
         "rounds": ROUNDS,
     }
@@ -481,7 +527,7 @@ async def health():
 # ---------- WebSocket: station ----------
 @app.websocket("/ws/station/{team}")
 async def ws_station(ws: WebSocket, team: str):
-    if team not in game.teams:
+    if team not in VALID_TEAM_IDS:   # nhận cả đội chưa được bật — trạm đợi MC bật đội
         await ws.close(code=1008)
         return
     await ws.accept()
@@ -527,6 +573,8 @@ async def ws_master(ws: WebSocket):
                     await game.force_accept(msg.get("team"))
                 elif a == "add_point":
                     await game.add_point(msg.get("team"), msg.get("delta", 1))
+                elif a == "set_teams":
+                    await game.set_teams(msg.get("count") or msg.get("team") or DEFAULT_TEAMS)
                 elif a == "skip_round":
                     await game.end_round("skip")
                 elif a == "next_round":

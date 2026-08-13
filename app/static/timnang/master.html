@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tìm Nắng — Bảng điểm (Master)</title>
 <style>
   * { box-sizing: border-box; }
@@ -37,6 +37,9 @@
   #op .start { background: linear-gradient(135deg, #2ecc71, #27ae60); color: #042; }
   #op .danger { background: #c0392b; }
   #op label { font-size: 11px; opacity: .6; text-transform: uppercase; }
+  #op select { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  #op select option { color: #000; }
 
   #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
   #winnerBanner { position: absolute; inset: 0; z-index: 25; display: none; flex-direction: column; align-items: center;
@@ -77,6 +80,16 @@
     <button class="danger" onclick="op('restart')">↻ Chạy lại</button>
     <button onclick="op('skip_round')">⏭ Bỏ qua vòng</button>
     <button onclick="op('next_round')">⏭ Vòng kế</button>
+    <div class="group">
+      <label>Số đội</label>
+      <select id="teamCount" onchange="op('set_teams', this.value)">
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+      </select>
+    </div>
     <div class="group" id="teamOps"></div>
   </div>
 </div>
@@ -84,14 +97,16 @@
 <audio id="player" preload="auto"></audio>
 
 <script>
+// Pool đầy đủ A–F (chỉ dùng để tra màu/tên cho game_over); số đội thực tế do server quyết định.
 const TEAMS = [
   { id: 'A', name: 'Đội A', color: '#e74c3c' },
   { id: 'B', name: 'Đội B', color: '#3498db' },
   { id: 'C', name: 'Đội C', color: '#2ecc71' },
-  { id: 'D', name: 'Đội D', color: '#f1c40f' },
+  { id: 'D', name: 'Đội D', color: '#e67e22' },
   { id: 'E', name: 'Đội E', color: '#9b59b6' },
+  { id: 'F', name: 'Đội F', color: '#1abc9c' },
 ];
-const ORDER_WORD = { 1: '🥇 Nhất', 2: '🥈 Nhì', 3: '🥉 Ba', 4: '🏅 Tư', 5: '🏅 Năm' };
+const ORDER_WORD = { 1: '🥇 Nhất', 2: '🥈 Nhì', 3: '🥉 Ba', 4: '🏅 Tư', 5: '🏅 Năm', 6: '🏅 Sáu' };
 
 const board = document.getElementById('board');
 const objectEl = document.getElementById('object');
@@ -102,7 +117,7 @@ const rankingEl = document.getElementById('ranking');
 
 // Hiện bảng xếp hạng cuối trò (1-2-3 + điểm)
 function showRanking(ranking) {
-  const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+  const medals = ['🥇', '🥈', '🥉', '🏅', '🏅', '🏅'];
   const rows = ranking.map((r, i) => `
     <div class="row${i === 0 ? ' first' : ''}" style="border-left:6px solid ${r.color}">
       <span class="medal">${medals[i] || (i + 1)}</span>
@@ -111,6 +126,49 @@ function showRanking(ranking) {
     </div>`).join('');
   rankingEl.innerHTML = `<div class="panel"><h2>🏆 BẢNG XẾP HẠNG 🏆</h2>${rows}</div>`;
   rankingEl.classList.add('show');
+}
+
+// R8: dựng lại bảng điểm theo danh sách đội active (từ server) — thêm mới, gỡ đội bị
+// tắt, giữ thứ tự A→F. Trạng thái thẻ (finished) được giữ nguyên khi cập nhật điểm.
+function updateBoard(m) {
+  const activeIds = m.teams.map(t => t.id);
+  document.querySelectorAll('#board .team').forEach(c => {
+    const id = c.id.replace('team-', '');
+    if (!activeIds.includes(id)) c.remove();
+  });
+  m.teams.forEach(t => {
+    let card = document.getElementById('team-' + t.id);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'team'; card.id = 'team-' + t.id;
+      card.style.setProperty('--c', t.color);
+      card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
+    }
+    document.getElementById('score-' + t.id).textContent = t.score;
+    const pts = m.teams.length - t.order + 1;
+    const orderEl = document.getElementById('order-' + t.id);
+    orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + pts + 'đ' : '';
+    card.classList.toggle('finished', !!t.order);
+    board.appendChild(card);   // giữ đúng thứ tự A→F
+  });
+  rebuildTeamOps(m.teams);
+}
+
+// Chỉ dựng lại nút operator khi TẬP đội thay đổi (tránh xoá/lập lại mỗi lần sync điểm).
+function rebuildTeamOps(teams) {
+  const g = document.getElementById('teamOps');
+  const sig = teams.map(t => t.id).join(',');
+  if (g.dataset.sig === sig) return;
+  g.dataset.sig = sig;
+  g.innerHTML = '';
+  teams.forEach(t => {
+    const wrap = document.createElement('div'); wrap.className = 'group';
+    wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
+      <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
+      <button onclick="op('add_point','${t.id}',1)">+1</button>
+      <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
+    g.appendChild(wrap);
+  });
 }
 
 let ws = null;
@@ -158,29 +216,11 @@ function initWS() {
         roundTag.textContent = `vòng ${m.round}/${m.rounds} · ${m.phase}`;
         if (m.object) { objectEl.textContent = '🎯 ' + m.object; objectEl.classList.toggle('live', m.phase === 'playing'); }
         else if (m.phase === 'idle') { objectEl.textContent = 'Bấm Bắt đầu để chơi'; objectEl.classList.remove('live'); }
-        m.teams.forEach(t => {
-          let card = document.getElementById('team-' + t.id);
-          if (!card) {
-            card = document.createElement('div');
-            card.className = 'team'; card.id = 'team-' + t.id;
-            card.style.setProperty('--c', t.color);
-            card.innerHTML = `<div class="name">${t.name}</div><div class="score" id="score-${t.id}">0</div><div class="order" id="order-${t.id}"></div>`;
-            board.appendChild(card);
-
-            const g = document.getElementById('teamOps');
-            const wrap = document.createElement('div'); wrap.className = 'group';
-            wrap.innerHTML = `<label style="color:${t.color}">${t.name}</label>
-              <button class="team-btn" style="--c:${t.color}" onclick="op('force_accept','${t.id}')">✓ Ép đúng</button>
-              <button onclick="op('add_point','${t.id}',1)">+1</button>
-              <button onclick="op('add_point','${t.id}',-1)">−1</button>`;
-            g.appendChild(wrap);
-          }
-          document.getElementById('score-' + t.id).textContent = t.score;
-          const orderEl = document.getElementById('order-' + t.id);
-          const pts = m.teams.length - t.order + 1;
-          orderEl.textContent = t.order ? (ORDER_WORD[t.order] || `#${t.order}`) + ' · +' + pts + 'đ' : '';
-          card.classList.toggle('finished', !!t.order);
-        });
+        if (m.n_teams != null) {
+          const tc = document.getElementById('teamCount');
+          if (tc && document.activeElement !== tc) tc.value = String(m.n_teams);
+        }
+        updateBoard(m);
         break;
       case 'play_audio':
         player.src = '/audio/' + m.key;
@@ -194,7 +234,8 @@ function initWS() {
         if (m.ranking) showRanking(m.ranking);
         const win = TEAMS.find(t => t.id === m.winner);
         if (win) {
-          document.getElementById('team-' + win.id).classList.add('winner');
+          const wc = document.getElementById('team-' + win.id);
+          if (wc) wc.classList.add('winner');
           winnerBanner.querySelector('.t').textContent = '🏆 ' + m.winner_name + ' VÔ ĐỊCH!';
           winnerBanner.querySelector('.t').style.color = win.color;
           winnerBanner.querySelector('.sub').textContent = 'Cảm ơn tất cả các đội!';
@@ -233,7 +274,7 @@ function op(action, team, delta) {
 }
 // Phím tắt: Enter = start, Esc = restart
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Enter') op('start');
   if (e.key === 'Escape') op('restart');
 });

@@ -2,37 +2,43 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trạm — Tìm Nắng</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: #0b1020; color: #fff;
     font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; user-select: none; }
   #stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 18px; padding: 20px; }
-  #teamBadge { font-size: clamp(28px, 5vw, 52px); font-weight: 900; padding: 8px 36px; border-radius: 18px;
+    align-items: center; justify-content: center; gap: 12px; padding: 12px; }
+  #phaseTag { position: absolute; top: 14px; left: 18px; font-size: 13px; opacity: .7;
+    background: rgba(0,0,0,.4); padding: 6px 14px; border-radius: 10px; z-index: 5; }
+  #score { position: absolute; top: 14px; right: 18px; font-size: clamp(20px, 3vw, 32px); font-weight: 800;
+    background: rgba(0,0,0,.4); padding: 8px 22px; border-radius: 14px; z-index: 5; }
+  #teamBadge { font-size: clamp(20px, 3.5vw, 38px); font-weight: 900; padding: 6px 28px; border-radius: 16px;
     box-shadow: 0 8px 30px rgba(0,0,0,.4); }
-  #objectBox { font-size: clamp(24px, 4vw, 44px); font-weight: 700; text-align: center;
-    background: rgba(0,0,0,.4); padding: 14px 32px; border-radius: 18px; min-height: 72px;
-    display: flex; align-items: center; justify-content: center; gap: 12px; transition: all .3s; }
-  #objectBox.live { border: 3px solid #ffd700; box-shadow: 0 0 30px rgba(255,215,0,.4); }
-  #camWrap { position: relative; width: min(90vw, 75vh); aspect-ratio: 4/3; border-radius: 24px; overflow: hidden;
+  /* R5: camera chiếm tối đa chiều cao còn lại; objectBox/result/recBtn overlay lên trên */
+  #camWrap { position: relative; flex: 1; width: min(96vw, calc((100vh - 160px) * 4 / 3));
+    max-height: calc(100vh - 140px); aspect-ratio: 4/3; border-radius: 22px; overflow: hidden;
     background: #000; box-shadow: 0 12px 40px rgba(0,0,0,.5); border: 4px solid var(--team, #fff); }
   #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }  /* mirror */
-  #recBtn { font-size: clamp(24px, 4vw, 40px); font-weight: 800; padding: 22px 60px; border: none; border-radius: 60px;
-    cursor: pointer; background: linear-gradient(135deg, #ffd700, #ff9800); color: #3a2a00;
-    box-shadow: 0 10px 36px rgba(255,152,0,.45); transition: transform .1s; }
-  #recBtn:hover:not(:disabled) { transform: scale(1.05); }
-  #recBtn:active:not(:disabled) { transform: scale(.96); }
-  #recBtn:disabled { opacity: .5; cursor: wait; }
-  #result { font-size: clamp(20px, 3vw, 32px); font-weight: 700; min-height: 48px; text-align: center; transition: all .3s; }
+  #objectBox { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); max-width: 92%;
+    font-size: clamp(18px, 3vw, 32px); font-weight: 700; text-align: center;
+    background: rgba(0,0,0,.45); padding: 10px 24px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center; gap: 10px; transition: all .3s; }
+  #objectBox.live { border: 3px solid #ffd700; box-shadow: 0 0 30px rgba(255,215,0,.4); }
+  #result { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); max-width: 92%;
+    font-size: clamp(18px, 3vw, 30px); font-weight: 700; text-align: center; min-height: 40px;
+    transition: all .3s; text-shadow: 0 2px 8px rgba(0,0,0,.8); }
   #result.ok { color: #2ecc71; text-shadow: 0 0 20px rgba(46,204,113,.5); }
   #result.bad { color: #ff6b6b; }
   #result.wait { color: #ffd700; }
-  #score { position: absolute; top: 18px; right: 22px; font-size: clamp(20px, 3vw, 32px); font-weight: 800;
-    background: rgba(0,0,0,.4); padding: 8px 22px; border-radius: 14px; }
-  #phaseTag { position: absolute; top: 18px; left: 22px; font-size: 13px; opacity: .7; background: rgba(0,0,0,.4);
-    padding: 6px 14px; border-radius: 10px; }
+  #recBtn { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    font-size: clamp(20px, 3.5vw, 34px); font-weight: 800; padding: 16px 52px; border: none; border-radius: 60px;
+    cursor: pointer; background: linear-gradient(135deg, #ffd700, #ff9800); color: #3a2a00;
+    box-shadow: 0 10px 36px rgba(255,152,0,.45); transition: transform .1s; }
+  #recBtn:hover:not(:disabled) { transform: translateX(-50%) scale(1.05); }
+  #recBtn:active:not(:disabled) { transform: translateX(-50%) scale(.96); }
+  #recBtn:disabled { opacity: .5; cursor: wait; }
   #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 
   /* ============ THINKING MODAL POPUP ============ */
@@ -49,11 +55,13 @@
 <div id="stage">
   <div id="phaseTag">Trạm — Tìm Nắng</div>
   <div id="teamBadge">Đội ?</div>
-  <div id="objectBox">⏳ Đợi vòng bắt đầu...</div>
-  <div id="camWrap"><video id="cam" autoplay playsinline muted></video></div>
-  <button id="recBtn">🔍 NHẬN DIỆN</button>
-  <div id="result"> </div>
   <div id="score">Điểm: 0</div>
+  <div id="camWrap">
+    <video id="cam" autoplay playsinline muted></video>
+    <div id="objectBox">⏳ Đợi vòng bắt đầu...</div>
+    <div id="result"> </div>
+    <button id="recBtn">🔍 NHẬN DIỆN</button>
+  </div>
   <canvas id="confetti"></canvas>
 </div>
 <canvas id="snap" hidden></canvas>
@@ -67,8 +75,8 @@
 </div>
 
 <script>
-const TEAM_COLORS = { A: '#e74c3c', B: '#3498db', C: '#2ecc71', D: '#f1c40f', E: '#9b59b6' };
-const TEAM_NAMES  = { A: 'Đội A',  B: 'Đội B',  C: 'Đội C',  D: 'Đội D',  E: 'Đội E' };
+const TEAM_COLORS = { A: '#e74c3c', B: '#3498db', C: '#2ecc71', D: '#e67e22', E: '#9b59b6', F: '#1abc9c' };
+const TEAM_NAMES  = { A: 'Đội A',  B: 'Đội B',  C: 'Đội C',  D: 'Đội D',  E: 'Đội E',  F: 'Đội F' };
 const team = location.pathname.split('/').pop().toUpperCase();
 const teamColor = TEAM_COLORS[team] || '#fff';
 
