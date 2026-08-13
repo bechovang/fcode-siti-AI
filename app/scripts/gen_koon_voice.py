@@ -21,19 +21,19 @@ LINES = {
     # --- Phần 1: Chào & khởi động ---
     "01_intro_greet": "Hello các bạn nhỏ! Mình là KOON đây! Hôm nay KOON rất vui vì được gặp tất cả các bạn.",
     "02_intro_rainbow_q": "KOON muốn rủ các bạn đi tìm một điều thật kỳ diệu. Các bạn có thích ngắm cầu vồng không?",
-    "03_intro_lost_colors": "Ôa! KOON cũng thích lắm! Nhưng trên đường đến đây, KOON phát hiện cầu vồng đã vô tình làm rơi mất hết các màu sắc rồi. Các bạn có muốn trở thành những nhà thám hiểm nhí và giúp KOON tìm lại 7 sắc màu của cầu vồng không?",
-    "04_intro_rule": "Ye! Mình nhớ Chị Gió từng nói với mình rằng: mỗi khi một bạn nhỏ trả lời đúng một câu hỏi thì một sắc màu sẽ quay trở lại với cầu vồng. Chỉ cần chúng mình tìm đủ 7 màu thì điều kỳ diệu sẽ xuất hiện. Các bạn đã sẵn sàng đồng hành cùng KOON chưa?",
-    "05_intro_start": "Vậy thì... chuyến phiêu lưu bắt đầu thôi!",
+    "03_intro_lost_colors": "Oa! KOON cũng thích lắm! Nhưng trên đường đến đây, KOON phát hiện cầu vồng đã vô tình làm rơi mất hết các màu sắc rồi. Các bạn có muốn trở thành những nhà thám hiểm nhí và giúp KOON tìm lại bảy sắc màu của cầu vồng không?",
+    "04_intro_rule": "Ô kê, bắt đầu thôi, mình nhớ Chị Gió từng nói với mình rằng, mỗi khi một bạn nhỏ trả lời đúng một câu hỏi thì một sắc màu sẽ quay trở lại với cầu vồng. Chỉ cần chúng mình tìm đủ bảy màu thì điều kỳ diệu sẽ xuất hiện. Các bạn đã sẵn sàng đồng hành cùng KOON chưa?",
+    "05_intro_start": "Vậy thì. chuyến phiêu lưu bắt đầu thôi!",
     # --- Thử thách 1: Đỏ ---
-    "q1_question": "Ôa! KOON nhìn thấy mảnh màu đỏ rồi! Các bạn giúp mình nhé! Câu hỏi là: Trái gì càng chín càng đỏ, bên trong có rất nhiều hạt màu đen?",
+    "q1_question": "Oa! KOON nhìn thấy mảnh màu đỏ rồi! Các bạn giúp mình nhé! Câu hỏi là: Trái gì càng chín càng đỏ, bên trong có rất nhiều hạt màu đen?",
     "q1_right": "Đúng rồi! Chính là quả dưa hấu. Các bạn giỏi quá! Chúng mình đã tìm lại được mảnh màu đỏ đầu tiên rồi!",
     "q1_wrong": "Gần đúng rồi nè! Các bạn suy nghĩ thêm một chút nhé. Trái cây này rất mát, thường xuất hiện vào mùa hè và bên trong có rất nhiều hạt màu đen.",
     # --- Thử thách 2: Cam ---
-    "q2_question": "Ye! Cầu vồng đã có màu đầu tiên rồi! Chúng mình tiếp tục tìm mảnh màu cam nhé. Nhưng mảnh màu này đang trốn sau một câu đố đấy. Câu hỏi là: Cái gì có 4 chân nhưng không biết đi?",
+    "q2_question": "Tốt quá, Cầu vồng đã có màu đầu tiên rồi! Chúng mình tiếp tục tìm mảnh màu cam nhé. Nhưng mảnh màu này đang trốn sau một câu đố đấy. Câu hỏi là: Cái gì có 4 chân nhưng không biết đi?",
     "q2_right": "Chính xác! Đó là cái bàn. Mảnh màu cam đã quay trở lại rồi. Các bạn làm tốt lắm!",
     "q2_wrong": "Không sao đâu! Đây là một đồ vật mà ngày nào các bạn cũng ngồi học cùng đấy.",
     # --- Thử thách 3: Vàng ---
-    "q3_question": "Ôa! Bây giờ KOON nhìn thấy mảnh màu vàng ở phía trước. Muốn lấy được màu vàng, chúng mình hãy cùng trả lời câu hỏi này nhé. Loài vật nào được mệnh danh là Chúa tể rừng xanh?",
+    "q3_question": "Oa! Bây giờ KOON nhìn thấy mảnh màu vàng ở phía trước. Muốn lấy được màu vàng, chúng mình hãy cùng trả lời câu hỏi này nhé. Loài vật nào được mệnh danh là Chúa tể rừng xanh?",
     "q3_right": "Đúng rồi! Chính là sư tử. Các bạn thật thông minh! Màu vàng đã trở về với cầu vồng.",
     "q3_wrong": "Con vật này có chiếc bờm rất to và thường xuất hiện trong rừng.",
     # --- Thử thách 4: Xanh lá ---
@@ -41,7 +41,7 @@ LINES = {
     "q4_right": "Chính xác! Đó là ốc sên. Các bạn giỏi quá! Chỉ còn vài màu nữa thôi!",
     "q4_wrong": "Con vật này di chuyển rất chậm và lúc nào cũng mang chiếc vỏ trên lưng.",
     # --- Thử thách 5: Xanh dương ---
-    "q5_question": "Ôa! KOON đã nhìn thấy màu xanh dương rồi. Các bạn giúp mình lấy lại màu này nhé. Câu hỏi là: Loài hoa nào luôn hướng về phía mặt trời?",
+    "q5_question": "Oa! KOON đã nhìn thấy màu xanh dương rồi. Các bạn giúp mình lấy lại màu này nhé. Câu hỏi là: Loài hoa nào luôn hướng về phía mặt trời?",
     "q5_right": "Đúng rồi! Chính là hoa hướng dương. Cầu vồng của chúng mình sắp hoàn thành rồi!",
     "q5_wrong": "Tên của loài hoa này đã nói lên đặc điểm của nó rồi đấy.",
     # --- Thử thách 6: Chàm ---
@@ -53,7 +53,7 @@ LINES = {
     "q7_right": "Chính xác! Đó là cầu vồng! Chúng mình đã tìm lại đủ 7 sắc màu rồi!",
     "q7_wrong": "Đó là một dải màu rất đẹp thường xuất hiện sau cơn mưa.",
     # --- Phần 3: Recap ---
-    "90_recap": "Ôa! Chúng mình đã làm được rồi! Nhờ sự thông minh và nhiệt tình của các bạn mà cầu vồng đã tìm lại đủ 7 sắc màu. Các bạn có muốn xem điều kỳ diệu ấy là gì không? Vậy hãy cùng KOON đón chờ điều kỳ diệu ấy nhé!",
+    "90_recap": "Oa! Chúng mình đã làm được rồi! Nhờ sự thông minh và nhiệt tình của các bạn mà cầu vồng đã tìm lại đủ 7 sắc màu. Các bạn có muốn xem điều kỳ diệu ấy là gì không? Vậy hãy cùng KOON đón chờ điều kỳ diệu ấy nhé!",
     # --- Phần 4: Tạm biệt ---
     "99_goodbye": "Hóa ra điều kỳ diệu mà mình luôn tìm kiếm chính là những nụ cười, những bài học và những kỷ niệm đẹp mà chúng mình đã cùng nhau tạo nên. Cảm ơn các bạn vì đã đồng hành cùng KOON và giúp cầu vồng rực rỡ trở lại. KOON chúc các bạn sẽ luôn chăm ngoan, học thật giỏi, luôn vui vẻ và giữ thật nhiều ước mơ để tiếp tục khám phá thế giới. Hẹn gặp lại các bạn trong những chuyến phiêu lưu tiếp theo nhé. Tạm biệt các bạn nhỏ!",
 }

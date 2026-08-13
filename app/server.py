@@ -221,6 +221,7 @@ class Session:
         self._answer = None
         self._answer_ready = asyncio.Event()
         self._video_done = asyncio.Event()
+        self._continue_ready = asyncio.Event()  # chờ operator bấm nút "nói tiếp" trong intro
         self._op = None  # skip | force_correct | replay
         # Duy trì các file TTS đang phát để cleanup sau
         self._active_tts_files: list[str] = []
@@ -276,6 +277,7 @@ class Session:
         self._audio_done.set()
         self._answer_ready.set()
         self._video_done.set()
+        self._continue_ready.set()
 
     async def state(self):
         await self.send({
@@ -288,13 +290,17 @@ class Session:
 
 
 # ---------- kịch bản KOON với TTS động ----------
-INTRO_LINES = [
-    "Xin chào tất cả các bạn nhỏ! Tôi là Koon đây!",
-    "Các bạn có biết không, trên bầu trời có một cầu vồng tuyệt đẹp với bảy sắc màu.",
-    "Nhưng mà ông trời đã lấy mất bảy màu của cầu vồng rồi!",
-    "Các bạn hãy giúp tôi tìm lại những mảnh màu đó nhé. Chúng ta sẽ cùng trả lời bảy câu hỏi thú vị!",
-    "Các bạn đã sẵn sàng chưa? Cùng bắt đầu thôi!",
+# Intro tương tác: KOON nói từng đoạn bằng file pre-cache (phát TỨC THÌ, không synth động).
+# Mỗi đoạn = 1 hoặc nhiều file .wav đã gen sẵn trong app/assets/audio/koon/.
+# Muốn đổi lời thoại? Sửa trong app/scripts/gen_koon_voice.py (LINES) rồi chạy lại lệnh gen.
+INTRO_CHUNK_KEYS = [
+    ["01_intro_greet", "02_intro_rainbow_q"],   # đoạn 1: chào + "thích ngắm cầu vồng không?"
+    ["03_intro_lost_colors"],                    # đoạn 2: "giúp KOON tìm 7 sắc màu... không?"
+    ["04_intro_rule"],                           # đoạn 3: "sẵn sàng đồng hành... chưa?"
+    ["05_intro_start"],                          # đoạn 4: "chuyến phiêu lưu bắt đầu thôi!"
 ]
+# Chữ hiện trên nút "nói tiếp" ở góc trái trên (câu operator cần chờ trẻ đồng thanh).
+INTRO_PROMPTS = ["👏 Có!", "👏 Có!", "👏 Sẵn sàng!", "👏 Bắt đầu!"]
 
 OUTRO_RECAP = (
     "Cảm ơn tất cả các bạn đã giúp Koon tìm lại đủ bảy sắc màu!"
@@ -316,14 +322,21 @@ OUTRO_GOODBYE = (
 async def run_flow(s: Session):
     """Chạy kịch bản 7 thử thách với TTS động."""
     try:
-        # ---- INTRO ----
+        # ---- INTRO (tương tác: KOON nói từng đoạn, dừng sau mỗi đoạn chờ operator bấm nút) ----
         s.phase = "intro"
         await s.state()
-        for i, line in enumerate(INTRO_LINES):
+        for i, keys in enumerate(INTRO_CHUNK_KEYS):
             if s._op == "skip":
                 s._op = None
                 break
-            await s.play_or_say(K.INTRO[i], line)
+            for key in keys:
+                await s.play_or_say(key, "")   # pre-cache .wav → phát tức thì (không synth động)
+            if s._op == "skip":
+                s._op = None
+                break
+            s._continue_ready.clear()
+            await s.send({"type": "intro_pause", "prompt": INTRO_PROMPTS[i]})
+            await s._continue_ready.wait()
 
         # ---- 7 THỬ THÁCH ----
         for i, ch in enumerate(K.CHALLENGES):
@@ -467,6 +480,8 @@ async def ws_endpoint(ws: WebSocket):
                 await start()
             elif t == "audio_ended":
                 s._audio_done.set()
+            elif t == "continue":
+                s._continue_ready.set()
             elif t in ("video_ended", "overlay_ended"):
                 s._video_done.set()
             elif t == "answer":
@@ -503,18 +518,20 @@ async def index():
 @app.get("/audio/{key}")
 async def audio(key: str):
     extless = key.replace(".wav", "").replace(".mp3", "")
+    # no-store: browser LUÔN lấy file mới (tránh chơi audio cũ sau khi regen .wav)
+    NO_CACHE = {"Cache-Control": "no-store"}
     # 1. TTS động (Kokoro say()) — temp WAV
     tts_path = os.path.join(TTS_DIR, f"{extless}.wav")
     if os.path.isfile(tts_path):
-        return FileResponse(tts_path, media_type="audio/wav")
+        return FileResponse(tts_path, media_type="audio/wav", headers=NO_CACHE)
     # 2. Pre-cache Kokoro — .wav trong AUDIO_DIR
     wav_path = os.path.join(K.AUDIO_DIR, f"{extless}.wav")
     if os.path.isfile(wav_path):
-        return FileResponse(wav_path, media_type="audio/wav")
+        return FileResponse(wav_path, media_type="audio/wav", headers=NO_CACHE)
     # 3. Backup edge-tts — .mp3 trong AUDIO_DIR
     mp3_path = os.path.join(K.AUDIO_DIR, f"{extless}.mp3")
     if os.path.isfile(mp3_path):
-        return FileResponse(mp3_path, media_type="audio/mpeg")
+        return FileResponse(mp3_path, media_type="audio/mpeg", headers=NO_CACHE)
 
     return JSONResponse({"error": "not found", "key": key}, status_code=404)
 
