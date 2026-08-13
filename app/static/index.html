@@ -219,6 +219,8 @@
   <div id="op">
     <button onclick="op('replay')">Đọc lại <span class="kbd">R</span></button>
     <button onclick="op('skip')">Bỏ qua <span class="kbd">S</span></button>
+    <button onclick="pauseAudio()">Dừng <span class="kbd">P</span></button>
+    <button onclick="resumeAudio()">Nói tiếp <span class="kbd">C</span></button>
     <button onclick="op('force_correct')">Ép đúng <span class="kbd">F</span></button>
     <button onclick="op('restart')">Chạy lại <span class="kbd">Esc</span></button>
     <button onclick="toggleDiag()">🧪 Test STT</button>
@@ -524,6 +526,20 @@ function playAudio(key){
 }
 player.onended = () => { koon.classList.remove('speaking'); ws.send(JSON.stringify({type:'audio_ended'})); };
 
+function pauseAudio() {
+  if (!player.paused) {
+    player.pause();
+    koon.classList.remove('speaking');
+  }
+}
+
+function resumeAudio() {
+  if (player.paused && player.src) {
+    player.play().catch(err => console.warn('resume err', err));
+    koon.classList.add('speaking');
+  }
+}
+
 // ============================== RECAP VIDEO / OVERLAY ==============================
 const recapVideo = document.getElementById('recapVideo');
 const recapOverlay = document.getElementById('recapOverlay');
@@ -693,7 +709,9 @@ function op(action){ ws.send(JSON.stringify({type:'op', action})); }
 document.addEventListener('keydown', e=>{
   if(e.target.tagName==='INPUT') return;
   const map = {'r':'replay','s':'skip','f':'force_correct','Escape':'restart'};
-  if(map[e.key]) op(map[e.key]);
+  if(map[e.key]) { op(map[e.key]); return; }
+  if(e.key==='p' || e.key==='P') { pauseAudio(); return; }
+  if(e.key==='c' || e.key==='C') { resumeAudio(); return; }
 });
 
 // ============================== STT (Web Speech API) ==============================
