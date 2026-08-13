@@ -373,6 +373,7 @@ async def run_flow(s: Session):
                     break
                 else:
                     # Phản hồi hội thoại động (LLM/Kokoro) — KHÔNG đọc lại câu hỏi
+                    await s.send({"type": "wrong_answer"})
                     await s.say(reply)
 
         # ---- RAINBOW ----

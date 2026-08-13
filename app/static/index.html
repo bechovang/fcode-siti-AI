@@ -392,6 +392,19 @@ function playChime(kind){
         osc.start(now + i * 0.15);
         osc.stop(now + i * 0.15 + 0.45);
       });
+    } else if(kind === 'wrong'){
+      // 2 nốt đi xuống cho âm thanh sai
+      [392.00, 261.63].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, now + i * 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.2 + 0.25);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + i * 0.2);
+        osc.stop(now + i * 0.2 + 0.25);
+      });
     }
   } catch(e){ /* audio fail = silent */ }
 }
@@ -411,10 +424,10 @@ ws.onmessage = (e) => {
     case 'show_question':
       qEl.textContent = m.text;
       qEl.style.setProperty('--q-color', m.hex || 'transparent');
-      qEl.classList.add('show', 'has-color');
       break;
     case 'await_answer':
       statusEl.textContent = '👂 KOON đang nghe... (bé nói đáp án)';
+      if (qEl.textContent) qEl.classList.add('show', 'has-color');
       break;
     case 'unlock_color':
       unlockHex(m.hex);
@@ -423,7 +436,14 @@ ws.onmessage = (e) => {
       if(ui >= 0) orbDone(ui);
       statusEl.textContent = '✅ ĐÚNG! Mảnh màu đã được tìm thấy!';
       burstConfetti(60, [m.hex, '#ffd700', '#fff']);
+      // Thêm hiệu ứng pháo bông (sử dụng magic particles)
+      magicCanvas.classList.add('on');
+      startMagicParticles();
+      setTimeout(() => { magicCanvas.classList.remove('on'); stopMagicParticles(); }, 2500);
       playChime('correct');
+      break;
+    case 'wrong_answer':
+      playChime('wrong');
       break;
     case 'rainbow':
       statusEl.textContent = '🌈 Cầu vồng rực rỡ!';
