@@ -21,8 +21,8 @@
 | # | Vật phẩm | ID | Vision prompt (GPT-4o-mini) |
 |---|---|---|---|
 | 1 | Quả bóng tennis | `ball` | *"a tennis ball (small, yellow-green, fuzzy)"* |
-| 2 | Chai nước Lavie | `lavie` | *"a plastic bottle of Lavie mineral water (clear bottle, blue label, Vietnamese brand)"* |
-| 3 | Chai Coca-Cola | `coke` | *"a Coca-Cola bottle or can (red label, Coca-Cola brand)"* |
+| 2 | Chai nước | `bottle` | *"a plastic water bottle or mineral water bottle of any brand (clear or colored plastic drinking water bottle, Lavie, Aquafina, Dasani, TH True Water, or generic water bottle)"* |
+| 3 | Lon nước | `can` | *"an aluminum beverage can, soda can, or energy drink can of any brand (e.g. Monster Energy, Coca-Cola, Pepsi, Red Bull, Sprite, 7Up, or any canned drink)"* |
 | 4 | Cái muỗng | `spoon` | *"a spoon (eating utensil)"* |
 | 5 | Túi Tote | `tote` | *"a tote bag (cloth/fabric bag with two handles, flat)"* |
 | 6 | Cái tô nhựa | `bowl` | *"a plastic bowl (round, colorful)"* |

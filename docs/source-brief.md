@@ -117,7 +117,7 @@ Trò đối kháng **3 đội** (A/B/C). Mỗi vòng AI gọi tên 1 vật phẩ
 
 ### Dụng cụ (thực tế)
 - 3 thùng vật phẩm bí mật (che kín, khoét lỗ vừa tay) — mỗi đội 1 thùng.
-- 6 vật phẩm mô hình (3 bộ giống nhau): **bóng tennis, nước Lavie, Coca-Cola, muỗng, túi Tote, tô nhựa**.
+- 6 vật phẩm mô hình (3 bộ giống nhau): **bóng tennis, chai nước, lon nước, muỗng, túi Tote, tô nhựa**.
 - 3 laptop/webcam (trạm đội) + 1 màn LED sân khấu (master/scoreboard).
 - Server laptop chạy `timnang_master.py`. Điện thoại/tablet có thể dùng làm trạm (PWA webc
 
